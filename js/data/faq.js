@@ -75,19 +75,75 @@ window.FAQ = [
      'swallowing heroin there is no heroin and about five milligrams of morphine, so the heroin card goes and ' +
      'the morphine card stays.' },
 
-{ group: 'The Now tab', q: 'What is the plasma concentration on each card, and why is it mine?',
-  a: 'Every published threshold, therapeutic range and toxic level is written as a concentration, so a ' +
-     'milligram figure has to be divided by a volume before it can be compared with any of them. That volume ' +
-     'is estimated from YOUR weight and height: Boer\'s equation gives lean body mass, which is the right ' +
-     'starting point because blood lives in lean tissue and fat carries very little of it, then blood volume, ' +
-     'then plasma. Two people who took the same dose do not read the same number here. Sex is asked for ' +
-     'because Boer has separate coefficients, and is used for nothing else in the app.' },
+{ group: 'The Now tab', q: 'What is the concentration on each card, and why is it mine?',
+  a: 'Every published therapeutic range and toxic level is written as a concentration, so a milligram figure ' +
+     'has to be divided by a volume before it can be compared with any of them. That volume is the compound\'s ' +
+     'VOLUME OF DISTRIBUTION scaled by your body mass — the volume the body behaves as if the drug were ' +
+     'dissolved in, which is 0.6 L/kg for ethanol (genuinely body water) and 10 L/kg for THC (mostly fat). ' +
+     'Two people who took the same dose do not read the same number here.' },
 
-{ group: 'The Now tab', q: 'How accurate is that plasma concentration?',
-  a: 'Treat it as an order of magnitude, not a number. It is a ONE-COMPARTMENT figure: it assumes the drug is ' +
-     'dissolved in plasma and nowhere else, when a lipophilic compound with a large volume of distribution is ' +
-     'mostly in tissue — for those the real figure is substantially lower. Haematocrit alone varies by a fifth ' +
-     'between healthy adults, and the estimate inherits that too.' },
+{ group: 'The Now tab', q: 'What does "upper bound" mean under a concentration?',
+  a: 'That no volume of distribution is recorded for that compound, so the figure was divided by your plasma ' +
+     'volume instead — estimated from your weight and height by Boer\'s equation, which is also why sex is ' +
+     'asked for and is used for nothing else. Vd is larger than plasma volume for everything in this database, ' +
+     'so the real figure is lower and often by a lot. A metabolite with no Vd of its own borrows its parent\'s ' +
+     'and says so, because that is wrong by a factor of two or three where plasma volume would be wrong by a ' +
+     'hundred.' },
+
+{ group: 'The Now tab', q: 'What are the therapeutic / toxic / fatality bands?',
+  a: 'Population plasma concentrations reported for that compound, so the number on the card can be compared ' +
+     'with something. THE TOP BAND IS NOT A LETHAL DOSE. It is called "seen in fatalities" because that is ' +
+     'all it is — an observation about a population — and for opioids and benzodiazepines tolerance moves it ' +
+     'further than the width of the bands themselves: concentrations that kill someone opioid-naive are ' +
+     'routine in someone dependent, and two weeks off loses that. They are drawn as a list rather than a dial ' +
+     'for the same reason. Compounds whose bands would mislead more than they help have none.' },
+
+{ group: 'The Now tab', q: 'How accurate is the concentration?',
+  a: 'It is a modelled figure, not a measurement, and a one-compartment one at that. Haematocrit varies by a ' +
+     'fifth between healthy adults; Vd itself is a range rather than a constant and shifts with time after ' +
+     'the dose for anything that redistributes into fat; and the whole thing rests on you having logged what ' +
+     'you actually took. Right order of magnitude, not a lab result.' },
+
+{ group: 'The Now tab', q: 'What is the Steady state page for?',
+  a: 'Everything else in the app answers "what is one dose doing". This answers "what happens if I keep ' +
+     'doing this", which is a different question and the one that catches people out. Give it a substance, ' +
+     'dose and interval and it works out the accumulation ratio, the peak and trough once it levels off, and ' +
+     'how long that takes. Anything whose dosing interval is shorter than its half-life accumulates: take ' +
+     'diazepam once and it is a 43-hour compound, take it nightly and the nordazepam is still climbing on ' +
+     'day ten. Nothing on the page is logged — it is a hypothetical about a schedule you have not taken.' },
+
+{ group: 'The Now tab', q: 'Why does the Steady state page warn about a metabolite?',
+  a: 'Because the thing still climbing is usually not the drug you took. The page sets its horizon from the ' +
+     'longest-lived compound in the picture rather than from the parent, and says so when they differ — ' +
+     'diazepam levels off in about a week and its nordazepam takes a month. That gap is why dose adjustments ' +
+     'made in the first few days of a schedule are being made before the drug has finished arriving, and why ' +
+     'methadone deaths cluster during induction rather than after it.' },
+
+{ group: 'About', q: 'Does tolerance to one drug count towards another?',
+  a: 'Yes, and the Patterns tab now counts it. Every compound belongs to a cross-tolerance group, and doses ' +
+     'of anything in the same group build tolerance to the rest of it — weighted by how far the adaptation ' +
+     'actually transfers. Near-complete for GABAergics (benzodiazepines, alcohol, barbiturates and Z-drugs ' +
+     'share a receptor complex, which is why a benzodiazepine treats alcohol withdrawal) and for the ' +
+     'classical psychedelics; high but incomplete for opioids, which is exactly why rotation works and why ' +
+     'switching at an equianalgesic dose can overdose someone. Doses are normalised to each compound\'s own ' +
+     'common dose first, so potency is already handled. A row showing "+ Alprazolam" is telling you where ' +
+     'its tolerance came from.' },
+
+{ group: 'About', q: 'Does tolerance protect me?',
+  a: 'Only from the part you notice. Tolerance to the subjective effect builds far faster and further than ' +
+     'tolerance to respiratory depression, and cardiovascular load barely tolerates at all — so the dose ' +
+     'needed to feel something climbs while the dose that stops you breathing moves much less. That gap ' +
+     'closing is what a fatal overdose in a long-term user usually is. Tolerance also disappears much faster ' +
+     'than it built: a fortnight away from opioids costs most of it, which is why the period after detox or ' +
+     'release from custody is the most dangerous time to use a familiar dose.' },
+
+{ group: 'About', q: 'Why does the profile ask about six CYP enzymes separately?',
+  a: 'Because a genotype affects one enzyme at a time, and the difference matters. Codeine is cleared largely ' +
+     'by CYP2D6 and diazepam largely by CYP2C19, so a slow 2D6 setting should change one and not the other — ' +
+     'a single setting applied to all CYP clearance moved both. Set 2D6 slow and codeine\'s half-life goes to ' +
+     '1.12x while diazepam does not move; set 2C19 slow and diazepam goes to 1.57x while codeine does not. ' +
+     'Lorazepam, which is cleared by UGT and never touches CYP, is untouched by any of it. "Set all to" is ' +
+     'still one click if you only have one figure to go on.' },
 
 { group: 'Metabolites', q: 'What is the difference between a dose and a metabolite?',
   a: 'The dose is what you took. A metabolite is what your body turned it into. The distinction matters because ' +
@@ -233,9 +289,11 @@ window.FAQ = [
 { group: 'About', q: 'Why is my half-life different from the textbook figure?',
   a: 'Two corrections are applied. First, enzyme interactions: if something else you logged inhibits an enzyme ' +
      'the compound depends on, the half-life is recomputed from the fraction of clearance running through that ' +
-     'enzyme. Second, your profile: the CYP metaboliser setting in the header scales half-lives by how much of ' +
-     'that compound is CYP-cleared, so diazepam moves a great deal and lorazepam, cleared by a different enzyme ' +
-     'family, does not move at all. Turn the profile adjustment off in settings to see raw population figures.' },
+     'enzyme. Second, your profile: each CYP enzyme has its own metaboliser setting, and a half-life is scaled ' +
+     'by how much of THAT compound runs through each of them — so a slow CYP2C19 moves diazepam a great deal ' +
+     'and leaves codeine alone, while a slow CYP2D6 does the reverse. Lorazepam, cleared by UGT and never ' +
+     'touching CYP, is untouched by any setting. Turn the profile adjustment off in settings to see raw ' +
+     'population figures.' },
 
 { group: 'About', q: 'Why does heroin show only minutes of effect when it lasts hours?',
   a: 'Because the hours are not heroin. It has a three-minute half-life and is 97% cleared within twenty ' +

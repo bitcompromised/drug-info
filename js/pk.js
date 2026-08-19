@@ -491,6 +491,35 @@
            n === 'noneidentified' || n === 'nonereported' || n === 'nonknown';
   }
 
+  /**
+   * The pathway row that produces a given metabolite, if one names it.
+   *
+   * Needed because a row is what CONSUMES the parent, and several products
+   * can come out of one. See the partition rule in metaboliteTree.
+   */
+  function producingRow(source, metabolite) {
+    var paths = (source && source.metabolism && source.metabolism.pathways) || [];
+    var want = normName(metabolite.name);
+
+    /* A product name is prose and frequently names several compounds at once:
+       lisdexamfetamine's hydrolysis row has one product written
+       "Dextroamphetamine + L-lysine", and morphine's has "M3G / M6G". Strict
+       comparison finds neither, which is how the cleavage rows kept being
+       charged twice. Split the way formationFractionFor already does. */
+    var names = function (str) {
+      return String(str || '').split(/[/,+]|and/).map(normName).filter(Boolean);
+    };
+
+    for (var i = 0; i < paths.length; i++) {
+      var prods = paths[i].products || [];
+      for (var j = 0; j < prods.length; j++) {
+        if (names(prods[j].name).indexOf(want) >= 0) return paths[i];
+      }
+      if (names(paths[i].product).indexOf(want) >= 0) return paths[i];
+    }
+    return null;
+  }
+
   /** The compound entry for a metabolite name, when the database has one. */
   function entryFor(name) {
     var DB = global.DB;
@@ -555,23 +584,39 @@
       /* ---- the products of one pool cannot add up to more than the pool --
          Formation fractions are written per pathway, from whatever the
          literature reported for that step, and nothing ever made them add
-         up. Forty-six routes in this database declare direct products
-         summing past 1 — lisdexamfetamine and dimenhydrinate reach 2.0 —
-         which the model then took literally and formed twice as much
-         metabolite as there was parent to make it from.
+         up. Where the declared shares exceed the pool they are read as
+         relative yields and scaled to fit, which keeps their proportions and
+         only fixes the impossible total. Under 1 is left alone: the
+         remainder is the dose going down routes this entry does not
+         enumerate, which is normal and is a different claim.
 
-         A share of a pool is a share of a pool. When the declared shares
-         exceed it they are read as relative yields and scaled to fit, which
-         keeps their proportions and their ordering and only fixes the
-         impossible total. Under 1 is left alone: the remainder is the dose
-         going down routes this entry does not enumerate, which is normal and
-         is not the same claim at all. check-data.js reports the ones that
-         needed scaling. */
+         WHAT COUNTS AGAINST THE POOL IS A ROW, NOT A PRODUCT. A row is one
+         reaction, and one reaction can put out several things at once. Two
+         competing routes each take their own share of the parent; a cleavage
+         takes ONE share and emits two products from it. Lisdexamfetamine is
+         hydrolysed to dextroamphetamine and lysine — the molecule comes
+         apart, both halves are 100% of the dose, and summing the products
+         gave 2.0 and then halved both. Sucrose into glucose and fructose,
+         dimenhydrinate dissociating into its two components: same shape,
+         same wrong answer.
+
+         The data already tells the two apart and nothing was reading it. A
+         competing fork's products sum to the row's own fraction — morphine's
+         UGT2B7 row is 0.65, made of M3G at 0.55 and M6G at 0.10. A cleavage's
+         do not. So the pool is charged once per row. */
       var mets = directMetabolites(source).filter(function (m) {
         return !(depth > 0 && isPlaceholderProduct(m.name)) && !ancestry[normName(m.name)];
       });
       var shares = mets.map(function (m) { return formationFractionFor(source, m); });
-      var declared = shares.reduce(function (a, f) { return a + f.fraction; }, 0);
+
+      var charged = [], declared = 0;
+      mets.forEach(function (m, mi) {
+        var row = producingRow(source, m);
+        if (!row) { declared += shares[mi].fraction; return; }   // no row names it
+        if (charged.indexOf(row) >= 0) return;                   // already paid for
+        charged.push(row);
+        declared += row.fraction != null ? row.fraction : shares[mi].fraction;
+      });
       var fit = declared > 1 ? 1 / declared : 1;
 
       mets.forEach(function (m, mi) {
@@ -906,6 +951,62 @@
    * where 0 = naive and 1 = "full tolerance from repeated common dosing".
    * Cross-tolerance is applied between drugs sharing a `toleranceGroup`.
    */
+  /**
+   * How much of one compound's tolerance carries to another.
+   *
+   * `toleranceGroup` has been on every compound in this database since the
+   * beginning and nothing ever read it — it was printed on the substance
+   * page and never computed with, so someone taking alprazolam daily and
+   * then diazepam was told their diazepam tolerance was zero. It is not
+   * zero. It is most of the way to full.
+   *
+   * Cross-tolerance is real, partial, and varies by mechanism, so the
+   * factor is per group rather than one number:
+   *
+   *   gaba                near-complete. Benzodiazepines, alcohol,
+   *                       barbiturates and Z-drugs all act at the same
+   *                       receptor complex, which is why a benzodiazepine
+   *                       treats alcohol withdrawal at all.
+   *   psychedelic-5ht2a   near-complete and famously fast. LSD taken the
+   *                       day after psilocybin does very little.
+   *   opioid              high but not total, and asymmetric in ways this
+   *                       does not model — incomplete cross-tolerance is
+   *                       exactly why opioid rotation works clinically,
+   *                       and why a switch at an equianalgesic dose can
+   *                       overdose someone.
+   *   amphetamine         substantial for the subjective effect, much less
+   *                       so for the cardiovascular load.
+   *
+   * Doses are already normalised to each compound's own common dose before
+   * they get here, so potency is handled and this factor is only about how
+   * far the adaptation transfers.
+   *
+   * The default for an unlisted group is deliberately middling. A group
+   * exists because somebody judged those compounds to share a mechanism,
+   * and pretending the transfer is either total or nil would be a stronger
+   * claim than that judgement supports.
+   */
+  var CROSS_TOLERANCE = {
+    gaba: 0.9,
+    'psychedelic-5ht2a': 0.9,
+    opioid: 0.85,
+    amphetamine: 0.8,
+    cannabinoid: 0.8,
+    dissociative: 0.7,
+    cocaine: 0.8,
+    ephedrine: 0.8
+  };
+  var CROSS_DEFAULT = 0.7;
+
+  /** 1 for the same compound, 0 when nothing links them. */
+  function crossToleranceFactor(target, other) {
+    if (!target || !other) return 0;
+    if (target.id === other.id) return 1;
+    var g = target.toleranceGroup;
+    if (!g || other.toleranceGroup !== g) return 0;
+    return CROSS_TOLERANCE[g] != null ? CROSS_TOLERANCE[g] : CROSS_DEFAULT;
+  }
+
   function toleranceAt(drug, priorDoses, tNowMs) {
     var thl = drug.toleranceHalfLifeDays;
     if (!thl) return null;
@@ -934,9 +1035,12 @@
     routeDoses: routeDoses,
     doseTier: doseTier,
     toleranceAt: toleranceAt,
+    crossToleranceFactor: crossToleranceFactor,
+    CROSS_TOLERANCE: CROSS_TOLERANCE,
     metaboliteTree: metaboliteTree,
     metaboliteBreakdown: metaboliteBreakdown,
     directMetabolites: directMetabolites,
+    producingRow: producingRow,
     metabolismFor: metabolismFor,
     formationFractionFor: formationFractionFor,
     bareName: bareName

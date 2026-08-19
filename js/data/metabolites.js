@@ -463,7 +463,8 @@ DB.register([
       { enzyme: 'UGT1A9 / UGT2B7', reaction: 'Glucuronidation', product: '11-OH-THC glucuronide', fraction: 0.25 }
     ],
     metabolites: [
-      { name: 'THC-COOH', active: false, halfLifeH: 120, fraction: 0.7, note: 'Inactive; the drug-test target.' },
+      { name: 'THC-COOH (11-nor-9-carboxy-THC)', active: false, halfLifeH: 120, fraction: 0.7,
+        note: 'Inactive; the drug-test target. Named both ways in the literature, so both are here.' },
       { name: '11-OH-THC glucuronide', active: false, halfLifeH: 15, fraction: 0.25 }
     ],
     substrateOf: ['ADH', 'UGT1A9', 'UGT2B7'], excretion: 'Faecal and renal.', confidence: 'measured'

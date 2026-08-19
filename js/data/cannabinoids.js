@@ -592,7 +592,7 @@ DB.register([
     pathways: [
       { enzyme: 'Heat (non-enzymatic decarboxylation)', reaction: 'Loss of CO2 on heating above ~105 °C', product: 'Delta-9-THC', fraction: 0.9,
         note: 'Not metabolism at all, but the transformation that matters most: it is what turns an inactive compound into an intoxicating one. It happens in the lighter, the vaporiser or the oven, not in the body.' },
-      { enzyme: 'CYP2C9', reaction: 'Hydroxylation of any liberated THC', product: '11-OH-THC', fraction: 0.4 },
+      { enzyme: 'CYP2C9', reaction: 'Hydroxylation of any liberated THC', from: 'Delta-9-THC', product: '11-OH-THC', fraction: 0.4 },
       { enzyme: 'UGT', reaction: 'Glucuronidation', product: 'THCA-glucuronide', fraction: 0.3 }
     ],
     metabolites: [
@@ -629,7 +629,9 @@ DB.register([
     pathways: [
       { enzyme: 'Heat (non-enzymatic decarboxylation)', reaction: 'Loss of CO2 on heating', product: 'CBD', fraction: 0.9,
         note: 'Occurs during smoking, vaping or cooking rather than in the body.' },
-      { enzyme: 'CYP2C19 / CYP3A4', reaction: 'Hydroxylation of liberated CBD', product: '7-OH-CBD', fraction: 0.3 },
+      // Acts on the CBD the decarboxylation liberates, not on the acid.
+      { enzyme: 'CYP2C19 / CYP3A4', reaction: 'Hydroxylation of liberated CBD',
+        product: '7-OH-CBD', from: 'CBD', fraction: 0.3 },
       { enzyme: 'UGT', reaction: 'Glucuronidation', product: 'CBDA-glucuronide', fraction: 0.35 }
     ],
     metabolites: [

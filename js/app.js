@@ -200,19 +200,29 @@
     if (!p.applyToEstimates) return null;
     var factor = Profile.halfLifeFactor(d, p);
     var prodrug = Profile.prodrugWarning(d, p);
+    var fr = Profile.cypFractions(d);
+    var enzymes = Object.keys(fr).sort(function (a, b) { return fr[b] - fr[a]; });
+
     if (factor === 1 && !prodrug) {
-      if (p.cyp === 'medium') return null;
+      if (!enzymes.length) return null;
       return h('div', { class: 'note note-profile' }, [
-        h('strong', { text: 'Your metaboliser setting does not affect this compound. ' }),
-        'None of its characterised clearance runs through a CYP enzyme, so the ' +
-        Profile.CYP_LABEL[p.cyp].toLowerCase() + ' setting changes nothing here.'
+        h('strong', { text: 'Your metaboliser settings do not affect this compound. ' }),
+        'It is cleared by ' + enzymes.join(', ') + ', and you are set to normal for ' +
+        (enzymes.length === 1 ? 'that one' : 'all of those') + '.'
       ]);
     }
     var pct = Math.round(Profile.cypFraction(d) * 100);
+    // Which enzyme, and how much of the clearance it accounts for — the
+    // setting is per enzyme now, so naming one is the only way the figure
+    // can be checked against the settings panel.
+    var split = enzymes.map(function (e) {
+      return e + ' ' + Math.round(fr[e] * 100) + '% (' +
+        Profile.CYP_LABEL[Profile.cypSetting(e, p)].replace(/ \(.*\)$/, '').toLowerCase() + ')';
+    }).join(', ');
     return h('div', { class: 'note note-profile' }, [
       h('strong', { text: 'Adjusted for your profile: ' }),
-      pct + '% of this compound\'s clearance is CYP-dependent, and you are set to ' +
-      Profile.CYP_LABEL[p.cyp].toLowerCase() + '. Estimated half-life ' +
+      pct + '% of this compound\'s clearance is CYP-dependent — ' + split +
+      '. Estimated half-life ' +
       Charts.fmtDur(d.halfLife.hours * factor) + ' rather than the population figure of ' +
       Charts.fmtDur(d.halfLife.hours) + ' (×' + factor.toFixed(2) + ').',
       prodrug ? h('p', { class: 'small', style: 'margin:6px 0 0' }, [
@@ -398,6 +408,9 @@
   var NOW_PAGES = [
     { key: 'board',    label: 'Currently on board' },
     { key: 'timeline', label: 'Timeline' },
+    // Not a view of the log: a hypothetical about a schedule you have not
+    // taken yet. It sits here because it runs on the same model.
+    { key: 'schedule', label: 'Steady state' },
     { key: 'history',  label: 'Dose history' }
   ];
 
@@ -426,6 +439,7 @@
     root.appendChild(bar);
 
     if (state.nowPage === 'timeline') { renderTimeline(root); return; }
+    if (state.nowPage === 'schedule') { renderSchedule(root); return; }
     if (state.nowPage === 'history') { renderHistory(root); return; }
     renderOnBoard(root, now);
   }
@@ -1213,7 +1227,7 @@
         ' route, against everything that route will ever deliver — the dose times its bioavailability, not the dose.'),
       meterOf('Eliminated', eliminated, absorbable,
         'How much of what arrived has been cleared, against everything that has to be cleared.'),
-      plasmaBlock(circulating, d.name),
+      plasmaBlock(circulating, d.name, d),
       metabolitePresenceLine(direct)
     ]);
   }
@@ -1258,34 +1272,133 @@
         'How much of this metabolite has been produced, against everything these doses will ever produce of it.'),
       meterOf('Eliminated', gone, m.totalFormed,
         'How much of what has been produced is already cleared, against everything that has to be.'),
-      plasmaBlock(present, m.name),
+      plasmaBlock(present, m.name, concSource(mEnt, g.drug)),
       metabolitePresenceLine(children),
       m.note ? h('p', { class: 'small muted', text: m.note }) : null
     ]);
   }
 
+  var BAND_LABEL = {
+    below:       ['below therapeutic', 'Under the band a clinical or typical dose produces.'],
+    therapeutic: ['therapeutic range', 'The band a clinical dose produces — or for compounds nobody prescribes, what a typical dose produces.'],
+    toxic:       ['toxic range', 'The band at which toxicity is commonly reported. Not a threshold: people are affected below it and tolerate it above.'],
+    fatal:       ['seen in fatalities', 'Within the band reported in fatal cases. That is an observation about a population, NOT a statement that this concentration is lethal — tolerance moves it enormously in both directions.']
+  };
+
   /**
-   * The concentration, not the amount.
+   * The concentration, and what it can be compared with.
    *
-   * Every published threshold, therapeutic window and toxic level is a
-   * concentration, so a milligram figure has to be divided by a volume before
-   * it can be compared to any of them. The volume is this user's estimated
-   * plasma volume — Boer lean body mass from the weight and height in the
-   * profile, then blood volume, then plasma — which is why two people who
-   * took the same dose do not read the same here.
+   * Every published therapeutic window and toxic level is a concentration, so
+   * a milligram figure has to be divided by a volume before it means anything
+   * next to one. The right divisor is the apparent volume of distribution —
+   * the volume the body behaves as if the drug were dissolved in — scaled by
+   * this user's body mass, which is why two people who took the same dose do
+   * not read the same number here. It used to divide by plasma volume, which
+   * assumes the drug is dissolved in plasma and nowhere else and had
+   * methamphetamine reading in micrograms per millilitre where a laboratory
+   * reports tens of nanograms.
+   *
+   * Where no Vd is recorded the plasma volume is still used and the figure is
+   * marked as an upper bound, because Vd exceeds plasma volume for every
+   * compound here. Saying "at most this" is honest; silently swapping what the
+   * number means is not.
    */
-  function plasmaBlock(amountMg, name) {
-    var pv = Profile.plasmaVolumeL();
-    return h('div', { class: 'card-conc' }, [
-      h('div', { class: 'card-figure card-figure-lead', text: fmtConc(Profile.plasmaConc(amountMg)) }),
-      h('div', { class: 'muted small', title:
-        'One-compartment estimate: ' + Potency.fmtMg(amountMg) + ' of ' + name + ' divided by ' +
-        pv.toFixed(2) + ' L of plasma, estimated from your profile by Boer’s lean-body-mass ' +
-        'equation. It assumes the drug is dissolved in plasma and nowhere else, so for anything ' +
-        'lipophilic — with a large volume of distribution — the real figure is lower.',
-        text: 'plasma concentration · ' + Potency.fmtMg(amountMg) + ' in ' +
-              pv.toFixed(1) + ' L plasma' })
-    ]);
+  /**
+   * What to divide a metabolite by.
+   *
+   * Its own Vd if it has one. Failing that, its PARENT's — a metabolite
+   * distributes nothing like plasma and usually not far off the compound it
+   * came from, so borrowing the parent is wrong by a factor of two or three
+   * where falling back to plasma volume is wrong by a hundred. The readout
+   * says which it used, so a borrowed figure is never mistaken for a
+   * measured one.
+   *
+   * Concentration bands are NOT inherited. A band is a statement about that
+   * specific compound and there is no defensible way to transfer one.
+   */
+  function concSource(entry, parent) {
+    if (entry && entry.vd != null) return entry;
+    if (!parent || parent.vd == null) return entry;
+    return {
+      name: entry ? entry.name : null,
+      vd: parent.vd,
+      vdBorrowedFrom: parent.name,
+      ranges: entry ? entry.ranges : null,
+      rangesNote: entry ? entry.rangesNote : null
+    };
+  }
+
+  function plasmaBlock(amountMg, name, drug) {
+    var vol = Profile.distributionVolumeL(drug);
+    var conc = Profile.plasmaConc(amountMg, drug);
+    var band = Profile.concentrationBand(conc, drug);
+
+    var borrowed = drug && drug.vdBorrowedFrom;
+    var basis = vol.basis === 'vd'
+      ? Potency.fmtMg(amountMg) + ' across ' + Math.round(vol.litres) + ' L (Vd ' + vol.vd +
+        ' L/kg' + (borrowed ? ", " + borrowed + "'s" : '') + ')'
+      : Potency.fmtMg(amountMg) + ' in ' + vol.litres.toFixed(1) + ' L plasma · upper bound';
+
+    var title = vol.basis === 'vd'
+      ? Potency.fmtMg(amountMg) + ' of ' + name + ' divided by ' +
+        (borrowed
+          ? borrowed + "'s volume of distribution, " + vol.vd + ' L/kg, because none is recorded ' +
+            'for ' + name + ' itself. A metabolite distributes nothing like plasma and usually not ' +
+            'far off the compound it came from, so this is wrong by a factor of two or three where ' +
+            'dividing by plasma volume would be wrong by a hundred.'
+          : 'its apparent volume of distribution: ' + vol.vd + ' L/kg times your body mass, or ' +
+            Math.round(vol.litres) + ' L. Vd is not a real volume — it is the volume the body ' +
+            'behaves as if the drug were dissolved in, and that is what converts an amount into ' +
+            'what a blood sample would read.')
+      : 'No volume of distribution is recorded for ' + name + ', so this divides by plasma ' +
+        'volume instead: ' + vol.litres.toFixed(2) + ' L, from your weight and height. Vd is larger ' +
+        'than plasma volume for everything in this database, so treat this as an UPPER BOUND ' +
+        'rather than an estimate — for a lipophilic compound the real figure can be a hundredth ' +
+        'of it.';
+
+    var kids = [
+      h('div', { class: 'card-figure card-figure-lead' }, [
+        fmtConc(conc),
+        band ? h('span', { class: 'pill band-' + band.key, title: BAND_LABEL[band.key][1],
+                            text: BAND_LABEL[band.key][0] }) : null
+      ]),
+      h('div', { class: 'muted small', title: title,
+        text: (vol.basis === 'vd' ? 'concentration · ' : 'plasma concentration · ') + basis })
+    ];
+
+    if (band) kids.push(bandScale(band));
+    return h('div', { class: 'card-conc' }, kids);
+  }
+
+  /**
+   * The reported bands, laid out so the figure can be read against them.
+   *
+   * Deliberately not a gauge with a needle on it. These bands overlap, they
+   * are population observations rather than thresholds, and for opioids and
+   * benzodiazepines tolerance moves them by more than the width of the bands
+   * themselves — so anything that looked like a precise position on a dial
+   * would be claiming something the data cannot support.
+   */
+  function bandScale(band) {
+    var r = band.ranges;
+    var fmtBand = function (b) {
+      if (!b) return null;
+      var lo = fmtConc(b[0] / 1000);
+      return b[1] == null ? lo + '+' : lo + '–' + fmtConc(b[1] / 1000);
+    };
+    var rows = [['therapeutic', r.therapeutic], ['toxic', r.toxic], ['fatal', r.fatal]]
+      .filter(function (x) { return x[1]; });
+
+    return h('div', { class: 'band-scale' }, rows.map(function (x) {
+      return h('span', { class: 'band-row' + (band.key === x[0] ? ' band-row-here' : '') }, [
+        h('span', { class: 'band-name', text: BAND_LABEL[x[0]][0] }),
+        h('span', { class: 'band-val', text: fmtBand(x[1]) })
+      ]);
+    }).concat([
+      band.note ? h('p', { class: 'band-note small muted', text: band.note }) : null,
+      h('p', { class: 'band-note small muted', text:
+        'Population bands, not thresholds — they overlap, and tolerance moves them further than their own width. A modelled concentration is not a measurement.' })
+    ]));
   }
 
   function findingsList(findings) {
@@ -2315,6 +2428,263 @@
     // twice on one tab.
   }
 
+
+  /* ======================================================================
+     NOW: STEADY STATE — what a repeated dose settles at
+     ----------------------------------------------------------------------
+     Everything else in this app answers "what is one dose doing". This
+     answers the other question, and it is the one that catches people out.
+
+     Take diazepam once and it is a 43-hour compound. Take it every night and
+     the nordazepam is still climbing on day ten, because a compound whose
+     dosing interval is shorter than its half-life accumulates until output
+     matches input. Methadone kills people during induction for exactly this
+     reason: the dose that was fine on day one is the same dose on day four,
+     and the concentration is not.
+
+     The model already had everything needed — this synthesises the doses
+     rather than making anyone log fourteen future entries by hand, and reads
+     the answer off the same curves the rest of the app uses.
+     ====================================================================== */
+
+  var scheduleState = {
+    drugId: null, route: null, doseMg: null, everyH: 24, days: null
+  };
+
+  /**
+   * Accumulation ratio for a one-compartment model.
+   *
+   *     R = 1 / (1 − e^(−ke·τ))
+   *
+   * The closed form, quoted alongside the simulated figure because they
+   * should agree and a reader is entitled to check. It is exact only for an
+   * instantly-absorbed dose, so the simulation is what the chart draws.
+   */
+  function accumulationRatio(halfLifeH, everyH) {
+    var ke = Math.LN2 / halfLifeH;
+    var d = 1 - Math.exp(-ke * everyH);
+    return d > 0 ? 1 / d : Infinity;
+  }
+
+  function renderSchedule(root) {
+    var drug = scheduleState.drugId ? DB.get(scheduleState.drugId) : null;
+
+    root.appendChild(h('div', { class: 'section-head sub' }, [
+      h('h3', { text: 'Steady state' }),
+      h('span', { class: 'muted small', text: 'What a repeated dose settles at' })
+    ]));
+
+    /* ---- the form ---- */
+    var drugInput = h('input', {
+      type: 'text', class: 'sched-drug', placeholder: 'Search substances…',
+      autocomplete: 'off', value: drug ? drug.name : ''
+    });
+    var results = h('div', { class: 'autocomplete' });
+    drugInput.addEventListener('input', function () {
+      var q = drugInput.value.trim();
+      results.innerHTML = '';
+      if (!q) { results.classList.remove('open'); return; }
+      var matches = DB.search(q, 12).filter(function (m) {
+        return !m.formedInVivo && Object.keys(m.routes).length;
+      }).slice(0, 8);
+      if (!matches.length) { results.classList.remove('open'); return; }
+      results.classList.add('open');
+      matches.forEach(function (d) {
+        results.appendChild(h('button', {
+          type: 'button', class: 'ac-item',
+          onclick: function () {
+            scheduleState.drugId = d.id;
+            scheduleState.route = null;
+            scheduleState.doseMg = null;
+            render();
+          }
+        }, [d.name, h('span', { class: 'muted small', text: ' ' + d.class })]));
+      });
+    });
+
+    var fields = [h('div', { class: 'field' }, [
+      h('label', { text: 'Substance' }),
+      h('div', { class: 'ac-wrap' }, [drugInput, results])
+    ])];
+
+    if (drug) {
+      var routeKeys = Object.keys(drug.routes);
+      if (!scheduleState.route || routeKeys.indexOf(scheduleState.route) < 0) {
+        scheduleState.route = routeKeys[0];
+      }
+      var routeSel = h('select', { onchange: function (e) {
+        scheduleState.route = e.target.value; scheduleState.doseMg = null; render();
+      } }, routeKeys.map(function (k) {
+        return h('option', { value: k, text: routeLabel(k),
+          selected: scheduleState.route === k ? 'selected' : null });
+      }));
+
+      if (scheduleState.doseMg == null) {
+        scheduleState.doseMg = PK.commonDoseMg(drug, scheduleState.route) || 10;
+      }
+      var doseIn = h('input', {
+        type: 'number', min: '0', step: 'any', value: scheduleState.doseMg,
+        onchange: function (e) {
+          scheduleState.doseMg = Math.max(0, parseFloat(e.target.value) || 0); render();
+        }
+      });
+      var everyIn = h('input', {
+        type: 'number', min: '0.25', step: '0.25', value: scheduleState.everyH,
+        onchange: function (e) {
+          scheduleState.everyH = Math.max(0.25, parseFloat(e.target.value) || 24); render();
+        }
+      });
+
+      fields.push(
+        h('div', { class: 'field' }, [h('label', { text: 'Route' }), routeSel]),
+        h('div', { class: 'field' }, [h('label', { text: 'Dose (mg)' }), doseIn]),
+        h('div', { class: 'field' }, [h('label', { text: 'Every (hours)' }), everyIn])
+      );
+    }
+    root.appendChild(h('div', { class: 'log-form' }, fields));
+
+    if (!drug) {
+      root.appendChild(h('div', { class: 'empty' }, [
+        h('p', { text: 'Pick a substance to see where a repeated dose settles.' }),
+        h('p', { class: 'muted', text:
+          'Anything whose dosing interval is shorter than its half-life accumulates, and the ' +
+          'compounds where that matters most are the ones with long-lived active metabolites — ' +
+          'diazepam, methadone, gidazepam.' })
+      ]));
+      return;
+    }
+
+    /* ---- simulate ----
+       Long enough to reach steady state on the SLOWEST thing in the picture,
+       which is frequently a metabolite rather than the parent: diazepam gets
+       there in about a week and its nordazepam takes a month. */
+    var route = drug.routes[scheduleState.route];
+    var mods = Profile.halfLifeModifier(drug);
+    var effH = PK.effectiveHalfLife(drug, mods ? [mods] : []).hours;
+
+    var probe = PK.buildDoseCurve(drug, scheduleState.route, scheduleState.doseMg, 0, {
+      halfLifeH: effH, effectScale: Profile.massScale()
+    });
+    var slowestH = PK.metaboliteBreakdown(probe).reduce(function (a, m) {
+      return Math.max(a, m.halfLifeH);
+    }, effH);
+    var days = Math.max(3, Math.min(60, Math.ceil((7 * slowestH) / 24) + 1));
+    scheduleState.days = days;
+
+    var nDoses = Math.max(1, Math.min(400, Math.ceil((days * 24) / scheduleState.everyH)));
+    // Anchored to now, so the axis reads as real dates and the answer is
+    // "where am I on Tuesday" rather than "where am I at hour 96".
+    var startMs = Date.now(), startH = startMs / HOUR;
+    var curves = [];
+    for (var i = 0; i < nDoses; i++) {
+      curves.push(PK.buildDoseCurve(drug, scheduleState.route, scheduleState.doseMg,
+        startH + i * scheduleState.everyH,
+        { halfLifeH: effH, effectScale: Profile.massScale() }));
+    }
+
+    var horizonH = days * 24;
+    var parentAt = function (tH) {
+      return curves.reduce(function (a, c) { return a + c.amountMgAt(tH); }, 0);
+    };
+
+    /* ---- the figures ---- */
+    // Peak and trough over the LAST full interval, which is steady state if
+    // the horizon reached it and the closest thing to it if not.
+    var lastFrom = startH + horizonH - scheduleState.everyH, ssPeak = 0, ssTrough = Infinity;
+    for (var q = 0; q <= 200; q++) {
+      var tq = lastFrom + (q / 200) * scheduleState.everyH;
+      var vq = parentAt(tq);
+      if (vq > ssPeak) ssPeak = vq;
+      if (vq < ssTrough) ssTrough = vq;
+    }
+    var firstPeak = 0;
+    for (var f = 0; f <= 200; f++) {
+      firstPeak = Math.max(firstPeak, parentAt(startH + (f / 200) * scheduleState.everyH));
+    }
+    var ratio = firstPeak > 0 ? ssPeak / firstPeak : 1;
+
+    // When the running peak first reaches 90% of the steady-state one.
+    var t90 = null;
+    for (var d2 = 0; d2 < nDoses; d2++) {
+      var pk = 0;
+      for (var r2 = 0; r2 <= 40; r2++) {
+        pk = Math.max(pk, parentAt(startH + d2 * scheduleState.everyH +
+          (r2 / 40) * scheduleState.everyH));
+      }
+      if (pk >= ssPeak * 0.9) { t90 = (d2 + 1) * scheduleState.everyH; break; }
+    }
+
+    root.appendChild(h('div', { class: 'stat-row' }, [
+      statCard('Accumulation', '×' + ratio.toFixed(1),
+        'Steady-state peak against the peak after the first dose. The closed form for a ' +
+        'one-compartment model is 1/(1−e^(−ke·τ)), which for this half-life and interval gives ×' +
+        accumulationRatio(effH, scheduleState.everyH).toFixed(1) + '.'),
+      statCard('Steady peak', Potency.fmtMg(ssPeak), 'Highest amount circulating within a dosing interval once it has levelled off.'),
+      statCard('Steady trough', Potency.fmtMg(ssTrough), 'Lowest — what is still there when the next dose goes in.'),
+      statCard('90% of steady state', t90 != null ? Charts.fmtDur(t90) : 'beyond ' + days + ' d',
+        'How long the schedule has to run before it is within a tenth of where it settles. ' +
+        'It depends on the half-life and not at all on the dose.')
+    ]));
+
+    /* ---- the chart ---- */
+    var t0 = startMs, t1 = startMs + horizonH * HOUR;
+    var series = [{
+      name: drug.name, color: Charts.colorFor(0), width: 2.4, fill: true,
+      points: sampleFn(t0, t1, function (t) { return parentAt(t / HOUR); }, 320)
+    }];
+
+    if (state.showMetabolites) {
+      mergedBreakdown(curves).filter(function (m) { return m.active; })
+        .slice(0, 5)
+        .forEach(function (m, i) {
+          series.push({
+            name: m.name + ' · from ' + m.parentNames.join(' + '),
+            color: Charts.colorFor(i + 1), width: 1.8,
+            points: sampleFn(t0, t1, function (t) { return m.amountAt(t / HOUR); }, 320)
+          });
+        });
+    }
+
+    root.appendChild(h('div', { class: 'chart-wrap' }, [
+      Charts.lineChart({
+        series: series, t0: t0, t1: t1, nowMs: startMs, height: 300,
+        yFormat: function (v) { return Potency.fmtMg(v); },
+        // A tick per dose, capped so a four-times-a-day schedule over a month
+        // does not draw six hundred of them.
+        markers: curves.slice(0, 60).map(function (cc) { return { tMs: cc.tStartH * HOUR, color: '#888' }; })
+      })
+    ]));
+    root.appendChild(seriesLegend(series, null, 'mg'));
+
+    root.appendChild(h('p', { class: 'muted small', text:
+      Potency.fmtMg(scheduleState.doseMg) + ' ' + routeLabel(scheduleState.route) + ' every ' +
+      Charts.fmtDur(scheduleState.everyH) + ' for ' + days + ' days, in milligram-equivalents. ' +
+      'The horizon is set from the longest-lived compound in the picture rather than from the ' +
+      'parent, because the thing still climbing is usually a metabolite: diazepam levels off in ' +
+      'about a week and its nordazepam takes a month.' }));
+
+    var slowest = mergedBreakdown(curves).filter(function (m) { return m.active; })
+      .sort(function (a, b) { return b.halfLifeH - a.halfLifeH; })[0];
+    if (slowest && slowest.halfLifeH > effH * 1.5) {
+      root.appendChild(h('div', { class: 'note note-warn' }, [
+        h('strong', { text: 'The metabolite is the one that accumulates. ' }),
+        slowest.name + ' has a half-life of ' + Charts.fmtDur(slowest.halfLifeH) + ' against ' +
+        drug.name + '’s ' + Charts.fmtDur(effH) + ', so it is still climbing long after the ' +
+        'parent has levelled off. On this schedule it reaches ' +
+        Potency.fmtMg(slowest.amountAt(startH + horizonH)) + ' by day ' + days + '. Dose adjustments made ' +
+        'in the first few days are being made before the drug has finished arriving.'
+      ]));
+    }
+
+    root.appendChild(h('div', { class: 'note note-small' }, [
+      h('strong', { text: 'What this is not. ' }),
+      'A hypothetical, not your log — nothing here is recorded. It assumes every dose is taken ' +
+      'exactly on time, that kinetics stay linear at every dose (they do not for alcohol, GHB or ' +
+      'MDMA, which saturate their own clearance), and that nothing changes over the period. ' +
+      'Tolerance is not modelled here at all, so the effect of a steady dose is overstated the ' +
+      'longer the schedule runs.'
+    ]));
+  }
 
   /**
    * Separate vs combined rows.
@@ -4601,23 +4971,67 @@
     return list;
   }
 
+  /**
+   * Name and save the current mixture.
+   *
+   * Asked with `prompt()` until it turned out that is not a thing everywhere:
+   * embedded browsers and some webviews block it outright, and the button did
+   * nothing but throw. The app builds modals for everything else, so this uses
+   * one too — which also lets it show what is being saved and warn before an
+   * overwrite, neither of which a prompt can do.
+   */
   function saveCurrentSolution() {
-    var name = prompt('Name this solution:', 'Mixture ' + new Date().toLocaleDateString());
-    if (!name) return;
     var list = loadSolutions();
-    var entry = {
-      id: 's' + Date.now().toString(36),
-      name: name,
-      savedAt: new Date().toISOString(),
-      doseMl: solutionState.doseMl,
-      items: JSON.parse(JSON.stringify(solutionState.items))
-    };
-    // Overwrite a recipe of the same name rather than accumulating duplicates.
-    var existing = -1;
-    list.forEach(function (x, i) { if (x.name === name) existing = i; });
-    if (existing >= 0) list[existing] = entry; else list.push(entry);
-    saveSolutions(list);
-    render();
+    var input = h('input', {
+      type: 'text', class: 'solution-name-input',
+      value: 'Mixture ' + new Date().toLocaleDateString(),
+      placeholder: 'Name this mixture'
+    });
+    var clash = h('p', { class: 'small muted' });
+
+    function commit() {
+      var name = String(input.value || '').trim();
+      if (!name) { input.focus(); return; }
+      var entry = {
+        id: 's' + Date.now().toString(36),
+        name: name,
+        savedAt: new Date().toISOString(),
+        doseMl: solutionState.doseMl,
+        items: JSON.parse(JSON.stringify(solutionState.items))
+      };
+      // Overwrite a recipe of the same name rather than accumulating duplicates.
+      var existing = -1;
+      list.forEach(function (x, i) { if (x.name === name) existing = i; });
+      if (existing >= 0) list[existing] = entry; else list.push(entry);
+      saveSolutions(list);
+      closeModal();
+      render();
+    }
+
+    function checkClash() {
+      var name = String(input.value || '').trim();
+      var hit = list.some(function (x) { return x.name === name; });
+      clash.textContent = hit ? 'A saved mixture already has this name — saving replaces it.' : '';
+    }
+    input.addEventListener('input', checkClash);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') commit(); });
+
+    var body = h('div', { class: 'settings' }, [
+      h('h2', { text: 'Save mixture' }),
+      h('p', { class: 'muted small', text:
+        solutionState.items.length + ' ingredient' + (solutionState.items.length === 1 ? '' : 's') +
+        ', ' + solutionState.doseMl + ' ml per dose. Saved in this browser only.' }),
+      h('div', { class: 'field' }, [h('label', { text: 'Name' }), input]),
+      clash,
+      h('div', { class: 'row-actions' }, [
+        h('button', { class: 'btn primary', text: 'Save', onclick: commit }),
+        h('button', { class: 'btn', text: 'Cancel', onclick: closeModal })
+      ])
+    ]);
+    openModal(body);
+    checkClash();
+    input.focus();
+    input.select();
   }
 
   function openSolutionManager() {
@@ -5192,11 +5606,26 @@
     ]);
     var tb = h('tbody');
     entries.forEach(function (e) {
-      var priors = logs.filter(function (l) { return l.drugId === e.drug.id; }).map(function (l) {
-        var common = PK.commonDoseMg(e.drug, l.route) || l.amountMg;
-        return { timeMs: l.timeMs, doseRatio: l.amountMg / common };
-      });
+      /* Every dose that builds tolerance to this compound, not just the
+         ones of this compound. `toleranceGroup` was already on every entry
+         and PK.toleranceAt already accepted a `crossFactor` per dose; the
+         two were simply never connected, so a week of daily alprazolam
+         showed as no tolerance at all to diazepam.
+
+         Doses are normalised to each compound's OWN common dose, so 1 mg of
+         alprazolam and 10 mg of diazepam both arrive here as roughly one
+         common dose and potency needs no separate handling. */
+      var contributors = {};
+      var priors = logs.map(function (l) {
+        var ld = DB.get(l.drugId);
+        var cross = PK.crossToleranceFactor(e.drug, ld);
+        if (!cross) return null;
+        if (ld.id !== e.drug.id) contributors[ld.name] = cross;
+        var common = PK.commonDoseMg(ld, l.route) || l.amountMg;
+        return { timeMs: l.timeMs, doseRatio: l.amountMg / common, crossFactor: cross };
+      }).filter(Boolean);
       var tol = PK.toleranceAt(e.drug, priors, now);
+      var crossNames = Object.keys(contributors);
       var daysSince = (now - e.last) / 86400000;
       var spacingOk = !e.drug.minRedoseDays || daysSince >= e.drug.minRedoseDays;
 
@@ -5206,9 +5635,21 @@
         h('td', { text: Potency.fmtMg(e.totalMg) }),
         h('td', { text: daysSince < 1 ? Charts.fmtDur(daysSince * 24) + ' ago' : Math.round(daysSince) + ' d ago' }),
         h('td', {}, [tol
-          ? h('div', { class: 'mini-meter' }, [
-              h('div', { class: 'mini-fill', style: 'width:' + Math.round(tol.index * 100) + '%' }),
-              h('span', { text: Math.round(tol.index * 100) + '%' })
+          ? h('div', {}, [
+              h('div', { class: 'mini-meter' }, [
+                h('div', { class: 'mini-fill', style: 'width:' + Math.round(tol.index * 100) + '%' }),
+                h('span', { text: Math.round(tol.index * 100) + '%' })
+              ]),
+              // Where it came from, when it did not all come from this
+              // compound — a cross-tolerance figure with no attribution is
+              // just a number that will not reconcile with the dose count.
+              crossNames.length
+                ? h('div', { class: 'muted small cross-note', title:
+                    'Cross-tolerance within the ' + e.drug.toleranceGroup + ' group, at ' +
+                    Math.round((PK.CROSS_TOLERANCE[e.drug.toleranceGroup] || 0.7) * 100) +
+                    '% transfer. Doses are normalised to each compound\'s own common dose first.',
+                    text: '+ ' + crossNames.join(', ') })
+                : null
             ])
           : document.createTextNode('—')]),
         h('td', {}, [e.drug.minRedoseDays
@@ -5221,7 +5662,14 @@
     root.appendChild(h('div', { class: 'table-wrap' }, [tbl]));
 
     root.appendChild(h('p', { class: 'muted small', text:
-      'Tolerance is a crude exponential-recovery model using each substance\'s tolerance half-life and cross-tolerance group. It is an illustration of decay over time, not a measurement.' }));
+      'Tolerance is a crude exponential-recovery model using each substance\'s tolerance half-life. ' +
+      'Doses of OTHER compounds in the same cross-tolerance group count too, normalised to each ' +
+      'compound\'s own common dose and weighted by how far the adaptation transfers — near-complete ' +
+      'for GABAergics and classical psychedelics, high but incomplete for opioids. A row showing ' +
+      '"+ " and another compound is telling you where its tolerance came from. It is an illustration ' +
+      'of decay over time, not a measurement, and it says nothing about the risks that do NOT ' +
+      'tolerate alongside the subjective effect — respiratory depression and cardiovascular load ' +
+      'being the two that kill people.' }));
   }
 
   /**
@@ -5354,6 +5802,30 @@
      SETTINGS — the user's own body and metaboliser status
      ====================================================================== */
 
+  /**
+   * The CYP settings in one line, for the header chip and its tooltip.
+   *
+   * Six enzymes do not fit on a button, so: say "mixed" when they differ and
+   * name the ones that are not normal in the tooltip, which is where there
+   * is room to be specific.
+   */
+  function cypSummary(prof) {
+    var settings = Profile.CYP_ENZYMES.map(function (e) { return Profile.cypSetting(e, prof); });
+    var uniform = settings.every(function (x) { return x === settings[0]; });
+    if (uniform) {
+      var label = Profile.CYP_LABEL[settings[0]];
+      return { chip: label.split(' ')[0].toLowerCase() + ' CYP',
+               full: 'all CYP enzymes set to ' + label.toLowerCase() };
+    }
+    var odd = Profile.CYP_ENZYMES.filter(function (e) {
+      return Profile.cypSetting(e, prof) !== 'medium';
+    }).map(function (e) {
+      return e + ' ' + Profile.CYP_LABEL[Profile.cypSetting(e, prof)].split(' ')[0].toLowerCase();
+    });
+    return { chip: 'mixed CYP',
+             full: odd.length ? odd.join(', ') + '; the rest normal' : 'CYP settings' };
+  }
+
   function openSettings() {
     var p = Profile.get();
     var body = h('div', { class: 'settings' });
@@ -5447,18 +5919,45 @@
       'yours work is largely genetic. If you have had pharmacogenomic testing, use it. If not, ' +
       'this is a guess — and a wrong guess here moves every half-life in the app.' }));
 
-    var cypWrap = h('div', { class: 'cyp-options' });
-    ['low', 'medium', 'high'].forEach(function (key) {
-      var selected = p.cyp === key;
-      cypWrap.appendChild(h('button', {
-        class: 'cyp-option' + (selected ? ' selected' : ''),
-        onclick: function () { Profile.set({ cyp: key }); openSettings(); render(); }
-      }, [
-        h('div', { class: 'cyp-head' }, [
-          h('strong', { text: Profile.CYP_LABEL[key] }),
-          h('span', { class: 'muted small', text: '×' + Profile.CYP_ACTIVITY[key].toFixed(2) + ' enzyme activity' })
+    /* One setting per enzyme. It used to be one setting for all CYP
+       clearance, which the code itself called the wrong shape: real
+       genotypes affect one enzyme at a time, and the difference is the
+       difference between codeine and diazepam. Setting everything to slow
+       is still one click away, and is what an old profile becomes. */
+    var setAll = h('div', { class: 'cyp-setall' }, [
+      h('span', { class: 'muted small', text: 'Set all to' })
+    ].concat(['low', 'medium', 'high'].map(function (key) {
+      return h('button', { class: 'btn small', title: Profile.CYP_DESC[key],
+        onclick: function () {
+          var next = {};
+          Profile.CYP_ENZYMES.forEach(function (e) { next[e] = key; });
+          Profile.set({ cyp: next }); openSettings(); render();
+        } }, [Profile.CYP_LABEL[key].split(' ')[0]]);
+    })));
+    body.appendChild(setAll);
+
+    var cypWrap = h('div', { class: 'cyp-enzymes' });
+    Profile.CYP_ENZYMES.forEach(function (enzyme) {
+      var cur = Profile.cypSetting(enzyme, p);
+      var seg = h('div', { class: 'seg' }, ['low', 'medium', 'high'].map(function (key) {
+        return h('button', {
+          class: 'seg-btn' + (cur === key ? ' active' : ''),
+          title: Profile.CYP_LABEL[key] + ' — ×' + Profile.CYP_ACTIVITY[key].toFixed(2) +
+                 ' enzyme activity. ' + Profile.CYP_DESC[key],
+          onclick: function () {
+            var next = {};
+            Profile.CYP_ENZYMES.forEach(function (e) { next[e] = Profile.cypSetting(e, p); });
+            next[enzyme] = key;
+            Profile.set({ cyp: next }); openSettings(); render();
+          }
+        }, [key === 'low' ? 'Slow' : key === 'high' ? 'Fast' : 'Normal']);
+      }));
+      cypWrap.appendChild(h('div', { class: 'cyp-enzyme-row' }, [
+        h('div', { class: 'cyp-enzyme-name' }, [
+          h('strong', { text: enzyme }),
+          h('p', { class: 'small muted', text: Profile.CYP_ENZYME_NOTE[enzyme] || '' })
         ]),
-        h('p', { class: 'small', text: Profile.CYP_DESC[key] })
+        seg
       ]));
     });
     body.appendChild(cypWrap);
@@ -5542,10 +6041,10 @@
       class: 'tab tab-settings' + (prof.applyToEstimates ? '' : ' muted-tab'),
       title: prof.applyToEstimates
         ? 'Profile: ' + prof.weightLb + ' lb, ' + Profile.formatHeight(prof.heightIn) + ', ' +
-          Profile.CYP_LABEL[prof.cyp].toLowerCase() + '. Estimates are adjusted for this.'
+          cypSummary(prof).full + '. Estimates are adjusted for this.'
         : 'Profile adjustments are currently switched off — you are seeing raw population figures.',
       onclick: openSettings
-    }, ['⚙ ' + prof.weightLb + ' lb · ' + Profile.CYP_LABEL[prof.cyp].split(' ')[0].toLowerCase() + ' CYP']));
+    }, ['⚙ ' + prof.weightLb + ' lb · ' + cypSummary(prof).chip]));
 
     var main = $('#main');
     main.innerHTML = '';

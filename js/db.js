@@ -270,9 +270,16 @@
       // to a guess: a wrong CAS number silently points at a different chemical,
       // which is worse than no CAS at all. Absent means "not recorded here",
       // never "does not exist".
+
       if (d.cas == null) d.cas = null;
       if (d.formula == null) d.formula = null;
       if (d.smiles == null) d.smiles = null;
+
+      // Apparent volume of distribution (L/kg) and reported concentration
+      // bands. Absent means "not recorded here", never "does not exist" —
+      // and the concentration readout says which it is looking at.
+      if (d.vd == null) { d.vd = null; d.vdRange = null; d.vdConfidence = null; d.vdNote = null; }
+      if (d.ranges == null) { d.ranges = null; d.rangesNote = null; }
 
       // ---- metabolism block ----------------------------------------------
       var m = d.metabolism = d.metabolism || {};
@@ -607,6 +614,53 @@
   }
 
   /**
+   * Apparent volume of distribution, and the concentrations a compound is
+   * reported at.
+   *
+   * WHY Vd IS NOT OPTIONAL FOR A CONCENTRATION. A milligram figure divided
+   * by plasma volume assumes the drug is dissolved in plasma and nowhere
+   * else. Almost nothing is. Vd is the volume the body behaves as if the
+   * drug were dissolved in — 0.6 L/kg for ethanol, which really does sit in
+   * body water, and 10 L/kg for THC, which is mostly in fat — so it is the
+   * factor between "how much is in me" and "what a blood test would read".
+   * Without it the app was reporting methamphetamine in micrograms per
+   * millilitre where a laboratory reports tens of nanograms.
+   *
+   *     Vd(L) = vd(L/kg) x body mass;   concentration = amount / Vd(L)
+   *
+   * `ranges` are population concentrations, in ng/mL:
+   *
+   *     therapeutic  the band a clinical dose produces, or for compounds
+   *                  nobody prescribes, what a recreational dose produces
+   *     toxic        where toxicity is commonly reported
+   *     fatal        the band seen in fatalities — NOT a threshold, and
+   *                  deliberately not called one
+   *
+   * These are population figures and they overlap heavily. For opioids and
+   * benzodiazepines the bands are close to meaningless without tolerance:
+   * concentrations that kill a naive person are routine in someone
+   * dependent, and the reverse holds too. The UI has to say so wherever it
+   * shows them; `note` carries the compound-specific version of that.
+   */
+  function kinetics(map) {
+    Object.keys(map).forEach(function (id) {
+      var d = get(id);
+      if (!d) { console.warn('kinetics: unknown compound', id); return; }
+      var k = map[id];
+      if (k.vd != null && d.vd == null) {
+        d.vd = k.vd;
+        d.vdRange = k.vdRange || null;
+        d.vdConfidence = k.vdConfidence || 'measured';
+        d.vdNote = k.vdNote || null;
+      }
+      if (k.ranges && !d.ranges) {
+        d.ranges = k.ranges;
+        d.rangesNote = k.rangesNote || null;
+      }
+    });
+  }
+
+  /**
    * Which metabolite (if any) a pathway's free-text `product` refers to.
    *
    * Products are prose and frequently name more than one thing at once —
@@ -639,6 +693,12 @@
       // written "Morphine-6-glucuronide (M6G)" and the metabolite just "M6G",
       // or the other way round.
       var pAbbrev = (String(part).match(/\(([^)]+)\)/) || [])[1];
+      // The name with any trailing parenthetical removed. A product written
+      // "Norephedrine" and a metabolite written "Norephedrine
+      // (phenylpropanolamine)" are the same compound, and the length-ratio
+      // guard below — which exists to stop "Morphine" claiming
+      // "Morphine-6-glucuronide" — was rejecting the pair at 0.39.
+      var pBare = norm(String(part).replace(/\s*\([^)]*\)\s*$/, ''));
 
       metabolites.forEach(function (m) {
         var mNorm = norm(m.name);
@@ -650,7 +710,10 @@
         var mAbbrev = (String(m.name).match(/\(([^)]+)\)/) || [])[1];
         var score = 0;
 
+        var mBare = norm(String(m.name).replace(/\s*\([^)]*\)\s*$/, ''));
+
         if (pNorm === mNorm) score = 100;
+        else if (pBare && mBare && pBare === mBare) score = 97;
         else if (pAbbrev && norm(pAbbrev) === mNorm) score = 95;
         else if (mAbbrev && norm(mAbbrev) === pNorm) score = 95;
         else if (mNorm.length >= 5 && pNorm.indexOf(mNorm) >= 0) {
@@ -856,6 +919,7 @@
     identify: identify,
     describe: describe,
     solubility: solubility,
+    kinetics: kinetics,
     smiles: smiles,
     matchMetabolite: matchMetabolite,
     identifierReport: identifierReport,

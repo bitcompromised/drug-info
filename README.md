@@ -904,13 +904,24 @@ that step, and nothing ever made them add up. Forty-six routes declare direct pr
 summing past 1 — lisdexamfetamine and dimenhydrinate reach 2.0 — which the model took
 literally and formed twice as much metabolite as there was parent to make it from.
 
-Shares that overrun are now read as relative yields and scaled to fit, which keeps their
-proportions and their ordering and fixes only the impossible total. Summing to *less*
-than 1 is left alone: the remainder is the dose going down routes the entry does not
-enumerate, which is normal and is a different claim entirely. `check-data.js` lists
-everything that needed scaling, because the guard stops the output being impossible and
-does not make the underlying figures right.
+Shares that overrun are read as relative yields and scaled to fit, which keeps their
+proportions and their ordering and fixes only the impossible total. Summing to *less* than 1
+is left alone: the remainder is the dose going down routes the entry does not enumerate,
+which is normal and is a different claim entirely.
 
+**What counts against the pool is a ROW, not a product** — and getting that wrong the first
+time broke the compounds it was meant to protect. A row is one reaction, and one reaction can
+put out several things at once. Two competing routes each take their own share of the parent;
+a *cleavage* takes one share and emits two products from it. Lisdexamfetamine is hydrolysed
+to dextroamphetamine **and** lysine — the molecule comes apart, both halves are 100% of the
+dose — so summing products gave 2.0 and then halved both. Sucrose into glucose and fructose,
+dimenhydrinate dissociating into its two components: same shape, same wrong answer.
+
+The data already tells the two apart and nothing was reading it. A competing fork's products
+sum to the row's own fraction — morphine's UGT2B7 row is 0.65, made of M3G at 0.55 and M6G at
+0.10. A cleavage's do not. So the pool is charged once per row, and `check-data.js` uses the
+same rule, because the guard stops the output being impossible and does not make the
+underlying figures right.
 #### The first pass can run more than one step
 
 Presystemic conversion was treated as ending at the first product: the liver made it, and
@@ -1010,21 +1021,38 @@ Corrections you supply feed the model through machinery that already existed rat
 as bolted-on fudge factors:
 
 ```
-CYP half-life factor = 1 / (1 − fm + fm · activity)
+CYP half-life factor = 1 / (1 − Σ fmₑ + Σ fmₑ · activityₑ)
 ```
 
-the same AUC-ratio form used for enzyme induction, where `fm` is the fraction of
-clearance running through CYP and `activity` is 0.35 / 1.0 / 2.2 for slow / normal /
-fast. A compound with no CYP clearance gets a factor of exactly 1 and is untouched.
+the same AUC-ratio form used for enzyme induction, summed **per enzyme**. `activity` is
+0.35 / 1.0 / 2.2 for slow / normal / fast, and a compound with no CYP clearance gets a
+factor of exactly 1 and is untouched.
+
+It used to be one setting applied across all CYP clearance at once, which the code itself
+called the wrong shape: real genotypes affect one enzyme at a time, and the difference is
+the difference between codeine and diazepam. Six enzymes are asked about separately —
+CYP2D6, 2C19, 3A4, 2C9, 1A2, 2B6 — chosen because they are the ones that change a decision.
+A row naming several enzymes splits its share between them rather than counting in full
+against each.
+
+| | all normal | 2D6 slow only | 2C19 slow only |
+|---|---|---|---|
+| Codeine (2D6 17%, 3A4 10%) | ×1.00 | **×1.12** | ×1.00 |
+| Diazepam (2C19 56%, 3A4 39%) | ×1.00 | ×1.00 | **×1.57** |
+| Lorazepam (UGT, no CYP) | ×1.00 | ×1.00 | ×1.00 |
+
+The prodrug inversion is now per enzyme too: someone can be a slow 2D6 metaboliser and a
+normal 3A4 one, and only the first inverts codeine. An existing profile holding a single
+setting keeps working and means what it always meant — that setting, applied to everything.
 
 Body mass scales the effect envelope by `70 kg / your mass`. Nothing here is dosed by
 body surface area, so BSA is displayed and not used.
 
-**Weight and height set the plasma volume every concentration is divided by.** Boer's
-equation gives lean body mass, which is the right starting point because blood lives in
-lean tissue and adipose carries very little of it — so two people of the same weight and
-different body composition genuinely do have different plasma volumes, and scaling by
-total weight would miss that:
+**Weight and height set the volume every concentration is divided by.** Boer's equation
+gives lean body mass, which is the right starting point because blood lives in lean tissue
+and adipose carries very little of it — so two people of the same weight and different body
+composition genuinely do have different plasma volumes, and scaling by total weight would
+miss that:
 
 ```
 male     LBM = 0.407·kg + 0.267·cm − 19.2
@@ -1041,12 +1069,108 @@ built on it; **it is used for nothing else** — no half-life, no dose ladder, n
 estimate — and *unspecified* averages the two rather than quietly assuming one, at a cost
 of about 4% either way.
 
-Two caveats travel with every concentration on the Timeline, and both are in the tooltip
-rather than buried here. Haematocrit alone varies by a fifth between healthy adults. And
-this is a **one-compartment** plasma level: it assumes the drug in the central
-compartment is dissolved in plasma and nowhere else, when a lipophilic compound with a
-large volume of distribution is mostly in tissue. For those the real figure is lower —
-substantially so. Treat it as an order of magnitude, not a number.
+### Volume of distribution, and what a concentration can be compared with
+
+Plasma volume is the wrong divisor for almost everything, and the app used it anyway. It
+assumes the drug is dissolved in plasma and nowhere else; almost nothing is. **Oral
+methamphetamine read 5.72 µg/mL where a laboratory reports tens of nanograms** — out by a
+factor of a hundred.
+
+The right divisor is the apparent volume of distribution: the volume the body behaves *as
+if* the drug were dissolved in. It is not a real volume — it exceeds body volume for
+anything that concentrates in tissue, which is exactly the point:
+
+```
+Vd(L) = vd(L/kg) × body mass        concentration = amount ÷ Vd(L)
+
+ethanol   0.6 L/kg   really is dissolved in body water
+diazepam  1.1 L/kg
+THC        10 L/kg   mostly in fat, only visiting the blood
+fluoxetine 30 L/kg
+```
+
+`js/data/kinetics.js` carries Vd for **56 compounds** and reported concentration bands for
+**47**. A compound with no Vd falls back to plasma volume and the readout marks the result
+an **upper bound**, because Vd exceeds plasma volume for everything here — saying "at most
+this" is honest, silently swapping what the number means is not. A metabolite with no Vd of
+its own borrows its parent's and says so: wrong by a factor of two or three, where falling
+back to plasma volume is wrong by a hundred.
+
+| 30 mg oral methamphetamine, 2 h in | before | now |
+|---|---|---|
+| Methamphetamine | 5.72 µg/mL | **57.8 ng/mL** (therapeutic range 20–60) |
+| 4-Hydroxymethamphetamine | 469 ng/mL | **4.76 ng/mL** (borrowing meth's Vd) |
+
+**Then the payoff: the figure can be compared with something.** Every published therapeutic
+window and toxic level is a concentration, and the card now shows where yours sits —
+therapeutic, toxic, or within the band reported in fatalities.
+
+The bands are handled carefully because they are easy to misread. The top one is called
+`fatal` in the sense of *seen in fatalities* and never "lethal dose": it is an observation
+about a population, and for opioids and benzodiazepines tolerance moves it by more than the
+width of the bands themselves — concentrations that kill a naive person are routine in
+someone dependent, and someone dependent who stops for two weeks loses that. Post-mortem
+figures are worse again, since opioids and tricyclics redistribute out of tissue after
+death. So the display is a list rather than a gauge with a needle, every compound carries
+its own caveat, and compounds whose bands would be actively misleading get none at all.
+
+Two caveats still travel with every concentration. Haematocrit alone varies by a fifth
+between healthy adults. And a modelled concentration is not a measurement.
+
+### Cross-tolerance
+
+`toleranceGroup` had been on every compound in this database from the beginning and
+nothing ever read it. It was printed on the substance page and never computed with, so a
+week of daily alprazolam followed by a diazepam dose reported **no diazepam tolerance at
+all**. It is not zero; it is most of the way to full.
+
+`PK.toleranceAt` already accepted a `crossFactor` per prior dose — the two halves were
+simply never connected. Every dose in a compound's tolerance group now counts, weighted by
+how far the adaptation actually transfers:
+
+| group | transfer | why |
+|---|---|---|
+| `gaba` | 0.9 | benzodiazepines, alcohol, barbiturates and Z-drugs act at the same receptor complex — which is why a benzodiazepine treats alcohol withdrawal at all |
+| `psychedelic-5ht2a` | 0.9 | near-complete and famously fast: LSD the day after psilocybin does very little |
+| `opioid` | 0.85 | high but not total, and asymmetric in ways this does not model — incomplete cross-tolerance is why opioid rotation works, and why switching at an equianalgesic dose can overdose someone |
+| `amphetamine` | 0.8 | substantial for the subjective effect, much less so for the cardiovascular load |
+| unlisted | 0.7 | a group exists because somebody judged those compounds to share a mechanism; claiming the transfer is total or nil is a stronger claim than that judgement supports |
+
+Doses are normalised to each compound's **own** common dose before they get here, so 1 mg
+of alprazolam and 10 mg of diazepam both arrive as roughly one common dose and potency needs
+no separate handling. A Patterns row showing "+ Alprazolam" is telling you where its
+tolerance came from — attribution matters, because otherwise the figure will not reconcile
+with the dose count beside it.
+
+It still says nothing about the risks that do **not** tolerate alongside the subjective
+effect. Respiratory depression and cardiovascular load are the two that kill people, and
+neither fades the way the high does.
+
+### Steady state
+
+Everything else in the app answers "what is one dose doing". The Now tab's fourth page
+answers the other question, and it is the one that catches people out: **take diazepam once
+and it is a 43-hour compound; take it every night and the nordazepam is still climbing on
+day ten.** Methadone kills people during induction for exactly this reason — the dose that
+was fine on day one is the same dose on day four, and the concentration is not.
+
+Give it a substance, route, dose and interval and it synthesises the schedule rather than
+making you log fourteen future entries by hand, then reads the answer off the same curves
+everything else uses: accumulation ratio, steady-state peak and trough, and how long the
+schedule has to run before it is within a tenth of where it settles.
+
+The simulated accumulation is quoted against the closed form for a one-compartment model,
+`1/(1−e^(−ke·τ))`, because they should agree and a reader is entitled to check — 15 mg of
+diazepam daily gives ×7.2 simulated against ×7.3 analytic. The horizon comes from the
+longest-lived compound in the picture rather than from the parent, because the thing still
+climbing is usually a metabolite, and the page says so outright when it is: *"Nordazepam has
+a half-life of 3.3 d against Diazepam's 43 h… dose adjustments made in the first few days
+are being made before the drug has finished arriving."*
+
+It is a hypothetical and nothing is recorded. It assumes every dose is on time, that
+kinetics stay linear at every dose — they do not for alcohol, GHB or MDMA, which saturate
+their own clearance — and it does not model tolerance at all, so the effect of a steady dose
+is overstated the longer the schedule runs.
 
 ### Relative potency
 
@@ -1204,8 +1328,8 @@ js/potency.js         equivalence scales + dose-ratio comparison
 js/interactions.js    explicit pairs, tag rules, enzyme rules
 js/charts.js          hand-rolled SVG (line, potency, pathway, pie, bar, stacked)
 js/storage.js         localStorage log, import/export
-js/profile.js         body mass, CYP metaboliser status and Boer plasma volume,
-                      fed back into the model
+js/profile.js         body mass, per-enzyme CYP metaboliser status, Boer plasma
+                      volume and volume of distribution, fed back into the model
 js/structure.js       SMILES parser, 2D layout and SVG structure renderer
 js/solution.js        mixture maths + plain-text report
 js/app.js             UI
@@ -1213,6 +1337,8 @@ js/data/*.js          the substance database — one file per class, plus the
                       decorator files that run last and attach reference data:
                       (identifiers.js       = CAS/formula
                        solubility.js        = per-solvent mg/ml
+                       kinetics.js          = volume of distribution and reported
+                                              concentration bands
                        smiles.js            = structures
                        descriptions.js      = the prose behind the "info" button
                        metabolites-extra.js = the metabolites the class files left out

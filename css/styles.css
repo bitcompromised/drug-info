@@ -1291,10 +1291,49 @@ pre.report {
 .card-conc .card-figure-lead { margin: 0 0 2px; font-size: 17px; }
 .card-conc .muted { cursor: help; }
 
+/* Where a concentration sits against the bands reported for that compound.
+   Colour carries the seriousness; the layout deliberately avoids a dial,
+   because these bands overlap and tolerance moves them further than their
+   own width. */
+.pill.band-below       { background: #1a1d24; color: #8a90a0; }
+.pill.band-therapeutic { background: #12241a; color: #6fd39a; }
+.pill.band-toxic       { background: #2a2312; color: #e0b657; }
+.pill.band-fatal       { background: #2a1416; color: #ff9095; }
+
+.band-scale { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+.band-row {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-size: 11.5px; color: var(--text-faint);
+  border-left: 2px solid transparent; padding-left: 6px;
+}
+.band-row .band-val { font-family: var(--mono); }
+.band-row-here { color: var(--text); border-left-color: var(--accent); }
+.band-note { margin: 6px 0 0; line-height: 1.45; }
+
 .scrub-card .card-sub { margin-bottom: 2px; }
 .scrub-card .card-sub + .card-sub { margin-bottom: 10px; }
 /* The one figure a moment on the timeline is actually being asked for. */
 .card-figure-lead {
   font-family: var(--mono); font-size: 15px; color: var(--text);
   margin: 6px 0 10px;
+}
+
+/* Where a cross-tolerance figure came from. */
+.cross-note { margin-top: 3px; cursor: help; }
+
+/* One row per CYP enzyme in the profile panel. The setting is per enzyme
+   because real genotypes are, so the panel has to be too. */
+.cyp-setall { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+.cyp-enzymes { display: flex; flex-direction: column; gap: 8px; }
+.cyp-enzyme-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 9px 12px; background: var(--bg-2);
+  border: 1px solid var(--border); border-radius: var(--radius);
+}
+.cyp-enzyme-name { min-width: 0; }
+.cyp-enzyme-name strong { font-family: var(--mono); }
+.cyp-enzyme-name p { margin: 3px 0 0; line-height: 1.4; }
+.cyp-enzyme-row .seg { flex: 0 0 auto; }
+@media (max-width: 560px) {
+  .cyp-enzyme-row { flex-direction: column; align-items: stretch; }
 }

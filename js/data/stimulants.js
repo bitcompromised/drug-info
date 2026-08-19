@@ -142,6 +142,8 @@ DB.register([
     ],
     metabolites: [
       { name: '4-Hydroxy-d-amphetamine', active: true, halfLifeH: 10, potencyRel: 0.3 },
+      { name: 'Norephedrine', active: true, halfLifeH: 4, potencyRel: 0.2,
+        note: 'Weak sympathomimetic, from the same dopamine-beta-hydroxylase step that makes it from racemic amphetamine.' },
       { name: 'Benzoic acid / hippuric acid', active: false }
     ],
     substrateOf: ['CYP2D6', 'FMO3'], inhibits: ['MAO-A'],
@@ -168,7 +170,8 @@ DB.register([
     firstPass: 'Not hepatic — conversion happens in erythrocytes, so it is largely unaffected by liver enzyme interactions.',
     pathways: [
       { enzyme: 'Red blood cell hydrolase', reaction: 'Enzymatic hydrolysis of the lysine amide bond', product: 'Dextroamphetamine + L-lysine', fraction: 1.0, note: 'Rate-limited and saturable, which is why insufflating or injecting it gains almost nothing.' },
-      { enzyme: 'CYP2D6', reaction: 'Downstream metabolism of liberated d-amphetamine', product: '4-Hydroxyamphetamine', fraction: 0.05 }
+      { enzyme: 'CYP2D6', reaction: 'Downstream metabolism of liberated d-amphetamine',
+        product: '4-Hydroxyamphetamine', from: 'Dextroamphetamine', fraction: 0.05 }
     ],
     metabolites: [
       { name: 'Dextroamphetamine', active: true, halfLifeH: 10, potencyRel: 1.0, note: 'The actual active drug. 30 mg lisdexamfetamine ≈ 8.9 mg dextroamphetamine base.' },
@@ -247,6 +250,7 @@ DB.register([
     metabolites: [
       { name: 'Amphetamine', active: true, halfLifeH: 11, potencyRel: 0.6, note: 'Active metabolite; typically 10-20% of the dose. Extends the total stimulant window well past the parent drug.' },
       { name: '4-Hydroxymethamphetamine', active: true, halfLifeH: 9, potencyRel: 0.2 },
+      { name: 'Norephedrine', active: true, halfLifeH: 4, potencyRel: 0.2 },
       { name: '4-Hydroxyamphetamine', active: true, halfLifeH: 10, potencyRel: 0.3 }
     ],
     substrateOf: ['CYP2D6'], inhibits: ['CYP2D6', 'MAO-A'],
