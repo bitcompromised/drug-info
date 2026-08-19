@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>drug-info — dose log, pharmacokinetics & interactions</title>
+<link rel="stylesheet" href="css/styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#128138;</text></svg>">
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <h1>drug-info</h1>
+    <span class="sub" id="db-stats">loading database…</span>
+  </div>
+  <nav id="nav"></nav>
+</header>
+
+<main id="main-wrap">
+  <div class="disclaimer">
+    <strong>Read this first.</strong> Every number here is a population-level estimate, and many are
+    extrapolations from analogues or from user-reported durations rather than measured human data — each
+    value is labelled with its confidence. Individual metabolism varies enormously (CYP genotype alone can
+    change a half-life tenfold). This is a personal tracking and harm-reduction reference, not medical
+    advice, not a dosing authority, and not a substitute for a clinician or poison control. An absent
+    interaction warning means "not in this database", never "safe".
+    <br><br>
+    Your log is stored only in this browser's local storage. The app makes no network requests.
+  </div>
+  <div id="main"></div>
+</main>
+
+<footer>
+  <p>Offline single-page app. Data drawn from published pharmacokinetic literature, DrugBank, PubChem,
+  EMCDDA reports and harm-reduction references; per-entry sources are listed on each substance page.</p>
+  <p>In an emergency, call your local emergency number. US Poison Control: 1-800-222-1222.
+  Recovery position for anyone unconscious. Naloxone reverses opioid overdose only.</p>
+</footer>
+
+<!-- core -->
+<script src="js/db.js"></script>
+<script src="js/pk.js"></script>
+
+<!-- data: one file per class; isomers.js must load last, it attaches to registered compounds -->
+<script src="js/data/stimulants.js"></script>
+<script src="js/data/entactogens.js"></script>
+<script src="js/data/psychedelics.js"></script>
+<script src="js/data/dissociatives.js"></script>
+<script src="js/data/depressants.js"></script>
+<script src="js/data/opioids.js"></script>
+<script src="js/data/cannabinoids.js"></script>
+<script src="js/data/pharmaceuticals.js"></script>
+<script src="js/data/research-chemicals.js"></script>
+<script src="js/data/metabolites.js"></script>
+<script src="js/data/intermediates.js"></script>
+<script src="js/data/inactive.js"></script>
+<script src="js/data/isomers.js"></script>
+<script src="js/data/metabolism-detail.js"></script>
+<script src="js/data/metabolites-extra.js"></script>
+<script src="js/data/metabolite-pages.js"></script>
+<script src="js/data/identifiers.js"></script>
+<script src="js/data/solubility.js"></script>
+<script src="js/data/smiles.js"></script>
+<script src="js/data/descriptions.js"></script>
+<script src="js/data/faq.js"></script>
+
+<!-- logic -->
+<script src="js/potency.js"></script>
+<script src="js/interactions.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/structure.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/profile.js"></script>
+<script src="js/solution.js"></script>
+<script src="js/app.js"></script>
+<script>App.init();</script>
+
+</body>
+</html>
