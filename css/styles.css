@@ -1664,7 +1664,13 @@ pre.report {
   font-family: var(--mono); font-size: 12.5px; color: var(--text);
   padding-bottom: 6px; margin-bottom: 6px;
   border-bottom: 1px solid var(--border);
+  /* Clock time and its distance from now, side by side. Wraps rather than
+     widening the tooltip, which is capped near the viewport edge. */
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
 }
+/* Not monospace: it is a phrase, not a reading, and the tabular figures the
+   timestamp needs make "4 min ago" look gappy beside it. */
+.hover-rel { font-family: inherit; }
 
 .hover-rows { display: flex; flex-direction: column; gap: 3px; }
 .hover-row { display: flex; align-items: center; gap: 7px; font-size: 12px; }

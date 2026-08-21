@@ -1072,6 +1072,31 @@
     return (hh < 10 ? Math.round(hh * 10) / 10 : Math.round(hh)) + 'h';
   }
 
+  /**
+   * A moment expressed against now: "now", "in 4 min", "4 min ago".
+   *
+   * The scrub clock, the card grid heading and the chart's hover readout all
+   * answer the same question about the same cursor, and each had grown its
+   * own copy of this ternary. One of them phrasing a moment differently from
+   * the other two — while both are on screen at once — reads as the two
+   * disagreeing about when it is.
+   *
+   * `nowMs` is passed rather than read from the clock so the label agrees
+   * with the "now" line the chart was drawn with, which is fixed at render.
+   * On a page left open an hour, reading Date.now() here would put the tooltip
+   * an hour out of step with the marker it is describing.
+   */
+  var NOW_EPSILON_H = 0.02;   // ~72 seconds: below this, "now" is the honest word
+
+  function relativeTime(tMs, nowMs) {
+    var deltaH = (tMs - nowMs) / HOUR;
+    if (Math.abs(deltaH) < NOW_EPSILON_H) return { text: 'now', atNow: true };
+    return {
+      text: deltaH > 0 ? 'in ' + Charts.fmtDur(deltaH) : Charts.fmtDur(-deltaH) + ' ago',
+      atNow: false
+    };
+  }
+
   /** Half-lives stay in hours however long they get — 75 h reads as 75 h. */
   function fmtHours(hours) {
     if (hours == null || !isFinite(hours)) return '—';
@@ -2689,7 +2714,7 @@
 
   var HOVER_DWELL_MS = 500;
 
-  function attachHoverReadout(wrap, svg, series, unit, t0, t1) {
+  function attachHoverReadout(wrap, svg, series, unit, t0, t1, nowMs) {
     /* One element, reused. It lives on <body> so no ancestor can clip it,
        which means it outlives the view that made it — so any previous one is
        removed here rather than left to accumulate on every render. */
@@ -2723,8 +2748,14 @@
 
     function build(tMs) {
       tip.innerHTML = '';
+      /* The clock time alone made the reader do the subtraction. Hovering a
+         curve is nearly always asking "how long until this peaks" or "how
+         long ago did I take it", and the answer was sitting one arithmetic
+         step away from a figure already on screen. */
+      var rel = relativeTime(tMs, nowMs);
       tip.appendChild(h('div', { class: 'hover-time' }, [
-        h('strong', { text: Charts.fmtDayClock(tMs) })
+        h('strong', { text: Charts.fmtDayClock(tMs) }),
+        h('span', { class: 'pill hover-rel' + (rel.atNow ? ' ok' : ''), text: rel.text })
       ]));
 
       var rows = series.map(function (sr, i) {
@@ -2972,15 +3003,11 @@
     var clockEl = h('div', { class: 'scrub-clock' });
 
     function paintClock() {
-      var delta = (state.cursorMs - now) / HOUR;
-      var atNow = Math.abs(delta) < 0.02;
+      var rel = relativeTime(state.cursorMs, now);
       clockEl.innerHTML = '';
       clockEl.appendChild(h('span', { class: 'scrub-clock-time',
         text: Charts.fmtDayClock(state.cursorMs) }));
-      clockEl.appendChild(h('span', { class: 'pill ' + (atNow ? 'ok' : ''),
-        text: atNow ? 'now'
-            : delta > 0 ? 'in ' + Charts.fmtDur(delta)
-                        : Charts.fmtDur(-delta) + ' ago' }));
+      clockEl.appendChild(h('span', { class: 'pill ' + (rel.atNow ? 'ok' : ''), text: rel.text }));
     }
 
     /* `datetime-local` wants a naive LOCAL string and toISOString gives UTC.
@@ -3019,7 +3046,7 @@
     paintClock();
 
     root.appendChild(chartWrap);
-    attachHoverReadout(chartWrap, chart, tData.series, unit, t0, t1);
+    attachHoverReadout(chartWrap, chart, tData.series, unit, t0, t1, now);
     /* No caption and no legend hint under the chart.
 
        There were two paragraphs here — one explaining what the figure beside
@@ -3070,10 +3097,7 @@
       var t = state.cursorMs, tH = t / HOUR;
       detail.innerHTML = '';
 
-      var delta = (t - now) / HOUR;
-      var rel = Math.abs(delta) < 0.02 ? 'now'
-              : delta > 0 ? 'in ' + Charts.fmtDur(delta)
-              : Charts.fmtDur(-delta) + ' ago';
+      var rel = relativeTime(t, now);
 
       var atCursor = visible.map(function (c) {
         return {
@@ -3160,7 +3184,7 @@
 
       detail.appendChild(h('div', { class: 'scrub-head' }, [
         h('h3', { text: Charts.fmtDayClock(t) }),
-        h('span', { class: 'pill ' + (Math.abs(delta) < 0.02 ? 'ok' : ''), text: rel }),
+        h('span', { class: 'pill ' + (rel.atNow ? 'ok' : ''), text: rel.text }),
         // Counts the grid, not the doses — a metabolite outliving its parent
         // is a compound present, and the number has to match what is drawn.
         h('span', { class: 'muted small', text: cards.length + ' present' })
