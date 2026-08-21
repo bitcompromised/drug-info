@@ -757,6 +757,29 @@
   }
 
   /**
+   * Attach provenance prose — where a compound physically comes from, and
+   * what its route of manufacture leaves behind in it.
+   *
+   * A separate pass from describe() for the same reason describe() is
+   * separate from the class files: it is written material rather than
+   * modelled pharmacology, and nothing in the app computes on it.
+   *
+   *   { origin, route, precursors, impurities, supply }
+   *
+   * js/data/synthesis.js states the two rules the content obeys — nothing
+   * invented, and chemistry named rather than performed. A compound with no
+   * entry is simply absent, and the panel says so instead of guessing at a
+   * route it cannot source.
+   */
+  function synthesis(map) {
+    Object.keys(map).forEach(function (id) {
+      var d = get(id);
+      if (!d) { console.warn('synthesis: unknown compound', id); return; }
+      d.synthesis = d.synthesis || map[id];
+    });
+  }
+
+  /**
    * Attach SMILES strings, which the structure renderer draws from.
    * Never overwrites a value declared inline on the entry.
    */
@@ -918,6 +941,7 @@
     enrich: enrich,
     identify: identify,
     describe: describe,
+    synthesis: synthesis,
     solubility: solubility,
     kinetics: kinetics,
     smiles: smiles,

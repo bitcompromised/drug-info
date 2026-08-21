@@ -655,9 +655,13 @@
      ====================================================================== */
 
   var HETERO_COLOR = {
-    N: '#5b9dd9', O: '#e5484d', S: '#d6a400', P: '#f76808',
-    F: '#46a758', Cl: '#46a758', Br: '#b06a3b', I: '#8e5bd9',
-    Na: '#9a9fae', K: '#9a9fae', Li: '#9a9fae', B: '#c98b6b', Si: '#9a9fae'
+    /* Element colours follow the usual CPK convention, but as tokens: on a
+       white sheet the dark-theme blues and yellows wash out, so the light
+       palette redefines them a few steps darker. */
+    N: 'var(--atom-n)', O: 'var(--atom-o)', S: 'var(--atom-s)', P: 'var(--atom-p)',
+    F: 'var(--atom-hal)', Cl: 'var(--atom-hal)', Br: 'var(--atom-br)', I: 'var(--atom-i)',
+    Na: 'var(--text-dim)', K: 'var(--text-dim)', Li: 'var(--text-dim)',
+    B: 'var(--atom-b)', Si: 'var(--text-dim)'
   };
 
   function svgEl(name, attrs, text) {

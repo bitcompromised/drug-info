@@ -3,32 +3,76 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>drug-info — dose log, pharmacokinetics & interactions</title>
+<meta name="color-scheme" content="dark light">
+<title>drug-info — dose log, pharmacokinetics &amp; interactions</title>
 <link rel="stylesheet" href="css/styles.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#128138;</text></svg>">
+<script>
+  /* Applied before the first paint: reading the theme in ui.js instead would
+     draw one dark frame on a light setting. Deliberately tiny and inline —
+     the app makes no network requests, so there is nothing to wait for. */
+  try {
+    var p = JSON.parse(localStorage.getItem('drug-info.prefs.v1') || '{}');
+    if (p.theme === 'dark' || p.theme === 'light') {
+      document.documentElement.setAttribute('data-theme', p.theme);
+    }
+  } catch (e) { /* private mode: fall through to the system preference */ }
+</script>
 </head>
 <body>
 
+<!-- First thing in the tab order. Six nav tabs and four toolbar buttons sit
+     between the top of the page and the content on every screen, and a
+     keyboard or screen-reader user should not have to walk them each time. -->
+<a class="skip-link" href="#main">Skip to content</a>
+
 <header class="top">
-  <div class="brand">
-    <h1>drug-info</h1>
-    <span class="sub" id="db-stats">loading database…</span>
+  <div class="appbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">◍</span>
+      <span class="brand-text">
+        <h1>drug-info</h1>
+        <span class="sub" id="db-stats">loading database…</span>
+      </span>
+    </div>
+
+    <span class="appbar-spacer"></span>
+
+    <button class="omni" id="omni" type="button" aria-label="Search substances, pages and commands">
+      <span class="omni-icon" aria-hidden="true">⌕</span>
+      <span class="omni-label">Search substances, pages, commands</span>
+      <kbd id="omni-kbd">Ctrl K</kbd>
+    </button>
+    <span id="profile-slot"></span>
+    <button class="icon-btn" id="theme-btn" type="button" title="Theme">◐</button>
+    <button class="icon-btn" id="keys-btn" type="button" title="Keyboard shortcuts" aria-label="Keyboard shortcuts">⌨</button>
   </div>
-  <nav id="nav"></nav>
+  <nav id="nav" aria-label="Sections"></nav>
 </header>
 
-<main id="main-wrap">
-  <div class="disclaimer">
-    <strong>Read this first.</strong> Every number here is a population-level estimate, and many are
-    extrapolations from analogues or from user-reported durations rather than measured human data — each
-    value is labelled with its confidence. Individual metabolism varies enormously (CYP genotype alone can
-    change a half-life tenfold). This is a personal tracking and harm-reduction reference, not medical
-    advice, not a dosing authority, and not a substitute for a clinician or poison control. An absent
-    interaction warning means "not in this database", never "safe".
-    <br><br>
-    Your log is stored only in this browser's local storage. The app makes no network requests.
+<main id="main-wrap" role="main">
+  <div class="disclaimer" id="disclaimer">
+    <button class="disc-head" id="disc-toggle" type="button" aria-expanded="true" aria-controls="disc-body">
+      <span class="disc-icon" aria-hidden="true">⚠</span>
+      <span class="disc-line">
+        <b>Estimates, not measurements.</b>
+        Population figures with individual variation of tenfold or more — not medical advice,
+        and a missing interaction warning never means safe.
+      </span>
+      <span class="disc-caret" aria-hidden="true">▾</span>
+    </button>
+    <div class="disc-body" id="disc-body">
+      <p>Every number here is a population-level estimate, and many are extrapolations from
+      analogues or from user-reported durations rather than measured human data — each value is
+      labelled with its confidence. Individual metabolism varies enormously (CYP genotype alone can
+      change a half-life tenfold). This is a personal tracking and harm-reduction reference, not
+      medical advice, not a dosing authority, and not a substitute for a clinician or poison
+      control. An absent interaction warning means "not in this database", never "safe".</p>
+      <p>Your log is stored only in this browser's local storage. The app makes no network
+      requests.</p>
+    </div>
   </div>
-  <div id="main"></div>
+  <div id="main" tabindex="-1"></div>
 </main>
 
 <footer>
@@ -64,6 +108,7 @@
 <script src="js/data/kinetics.js"></script>
 <script src="js/data/smiles.js"></script>
 <script src="js/data/descriptions.js"></script>
+<script src="js/data/synthesis.js"></script>
 <script src="js/data/faq.js"></script>
 
 <!-- logic -->
@@ -74,6 +119,7 @@
 <script src="js/storage.js"></script>
 <script src="js/profile.js"></script>
 <script src="js/solution.js"></script>
+<script src="js/ui.js"></script>
 <script src="js/app.js"></script>
 <script>App.init();</script>
 

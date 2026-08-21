@@ -9,12 +9,40 @@
 
   var KEY = 'drug-info.logs.v1';
   var PREFS = 'drug-info.prefs.v1';
+  // Written on the first load and never removed. Keyed separately from the
+  // log so that clearing the log — or clearing the example — is not mistaken
+  // for a first visit and does not seed the example again.
+  var SEEN = 'drug-info.seen.v1';
 
   var UNIT_TO_MG = { ng: 1e-6, ug: 0.001, 'µg': 0.001, mcg: 0.001, mg: 1, g: 1000 };
 
   function toMg(amount, unit) {
     var f = UNIT_TO_MG[unit];
     return f != null ? amount * f : amount;   // ml / canisters / inhalations stay as-is
+  }
+
+  /**
+   * Whether this browser has ever loaded the app.
+   *
+   * Everything the app knows lives in these three keys, so the absence of
+   * all three is the only honest definition of a first visit. Testing the
+   * log alone would re-seed the example every time someone emptied it,
+   * which is the one moment they have clearly said they do not want it.
+   */
+  function isFirstVisit() {
+    try {
+      return !localStorage.getItem(SEEN) &&
+             !localStorage.getItem(KEY) &&
+             !localStorage.getItem(PREFS);
+    } catch (e) {
+      // Private mode with storage disabled: not a first visit, just a
+      // browser that cannot remember. Seeding would repeat on every load.
+      return false;
+    }
+  }
+
+  function markSeen() {
+    try { localStorage.setItem(SEEN, new Date().toISOString()); } catch (e) { /* no storage */ }
   }
 
   function load() {
@@ -139,6 +167,7 @@
     load: load, save: save, add: add, update: update, remove: remove, clear: clear,
     exportJSON: exportJSON, exportCSV: exportCSV, importJSON: importJSON,
     getPrefs: getPrefs, setPref: setPref,
+    isFirstVisit: isFirstVisit, markSeen: markSeen,
     inWindow: inWindow, potentiallyActive: potentiallyActive,
     toMg: toMg, UNIT_TO_MG: UNIT_TO_MG
   };

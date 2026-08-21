@@ -461,12 +461,167 @@
    * The solution's total volume is DERIVED from the solvent masses, so it
    * updates as ingredients are added rather than being stated separately.
    */
+  /* ---------- dry mixtures --------------------------------------------------
+
+     Dissolving a compound and measuring by volume is the better technique and
+     it is not always available. Some compounds will not go into anything you
+     would put in your body; some people have a scale and no syringe; and a
+     pressed capsule has to be filled with a powder whatever the arithmetic was
+     done in.
+
+     The problem being solved is the same one: a compound active at a dose too
+     small to weigh. Cutting 100 mg of it into 10 g of filler makes a 100 mg
+     scoop carry 1 mg, which a scale CAN read. The arithmetic is simpler than
+     the volumetric case — it is all mass fractions — but the failure mode is
+     worse, and that is the part this has to be honest about.
+
+     WHY VOLUMETRIC IS STILL PREFERRED. A liquid mixes itself. Two powders do
+     not: they separate by particle size and density every time the container
+     is moved, and a scoop from the top of an under-mixed jar can carry several
+     times what the arithmetic says. Nothing in the numbers below can detect
+     that, so the warnings say it instead.
+     ------------------------------------------------------------------------ */
+
+  /**
+   * Practical readability of a common scale, in milligrams.
+   *
+   * A "0.001 g" jeweller's scale displays a milligram and is honest to about
+   * five in real use — drift, air currents, off-centre pans and linearity
+   * error all land in the same place. Weighing a 20 mg portion on one is
+   * therefore a ±25% operation, which is the entire reason for diluting.
+   */
+  var SCALE_RESOLUTION_MG = 5;
+
+  /**
+   * What can go wrong with a powder, in the order it matters.
+   *
+   * The arithmetic of a dry mixture is trivial and the practice is not, so
+   * almost all of this is about the gap between the two. Nothing computed from
+   * the masses can detect an unevenly mixed jar, which is the failure that
+   * actually kills people — so it is stated every time rather than triggered
+   * by a threshold.
+   */
+  function dryWarnings(rows, checks, straySolvents, findings) {
+    var out = [];
+    if (!checks) return out;
+
+    var actives = rows.filter(function (r) { return !r.inactive; });
+    var fillers = rows.filter(function (r) { return r.inactive; });
+
+    if (straySolvents && straySolvents.length) {
+      out.push({ level: 'warn', text:
+        'This is a dry mixture, so the solvent' + (straySolvents.length === 1 ? '' : 's') +
+        ' in the ingredient list ' + (straySolvents.length === 1 ? 'is' : 'are') +
+        ' being ignored — nothing is dissolved and no volume is involved. Remove ' +
+        (straySolvents.length === 1 ? 'it' : 'them') + ', or switch back to a solution.' });
+    }
+
+    if (!actives.length) {
+      out.push({ level: 'info', text:
+        'Nothing active in the mixture yet — add the compound you are diluting.' });
+      return out;
+    }
+
+    /* ---- the one that matters ---- */
+    out.push({ level: 'danger', text:
+      'MIXING IS THE WHOLE RISK, and none of the figures above can check it. Two powders ' +
+      'separate by particle size and density every time the jar is moved, so a scoop from a ' +
+      'poorly mixed batch can carry several times what the arithmetic says — and the more ' +
+      'dilute the mixture, the worse a clump of undiluted active is. This is why dissolving ' +
+      'in a liquid and measuring by volume is the safer technique wherever the compound and ' +
+      'the route allow it: a solution mixes itself and cannot separate.' });
+
+    if (!fillers.length) {
+      out.push({ level: 'warn', text:
+        'No inactive filler in the mixture, so this is not a dilution — it is two or more ' +
+        'actives weighed together, and every figure below is a share of that. If you meant ' +
+        'to dilute, add a bulking agent (lactose, mannitol, microcrystalline cellulose) as ' +
+        'the rest of the mass.' });
+    }
+
+    /* ---- can the dose be weighed at all ---- */
+    var err = checks.scaleErrorFraction;
+    if (err != null && checks.doseMassMg > 0) {
+      var pct = Math.round(err * 100);
+      if (err >= 0.25) {
+        out.push({ level: 'danger', text:
+          'A ' + fmtMassMg(checks.doseMassMg) + ' portion is below what a common scale can ' +
+          'weigh honestly. A milligram scale is good to roughly ±5 mg in real use, which is ' +
+          '±' + pct + '% here' + (checks.strongest && checks.activeErrorMg != null
+            ? ' — ±' + fmtMassMg(checks.activeErrorMg) + ' of ' + checks.strongest.drugName
+            : '') + '. Use more filler so the weighed portion is larger.' });
+      } else if (err > 0.05) {
+        out.push({ level: 'warn', text:
+          'A ' + fmtMassMg(checks.doseMassMg) + ' portion carries about ±' + pct + '% from ' +
+          'scale error alone (±5 mg is realistic for a milligram scale)' +
+          (checks.strongest && checks.activeErrorMg != null
+            ? ', or ±' + fmtMassMg(checks.activeErrorMg) + ' of ' + checks.strongest.drugName
+            : '') + '. More filler and a larger portion would tighten it.' });
+      }
+    }
+
+    /* ---- is the dilution doing its job ---- */
+    if (checks.dilutionRatio != null && fillers.length) {
+      var r = checks.dilutionRatio;
+      out.push({ level: 'info', text:
+        'Diluted about 1 part active to ' + (r >= 10 ? Math.round(r - 1) : (r - 1).toFixed(1)) +
+        ' parts everything else. A ' + fmtMassMg(checks.doseMassMg) + ' portion is one dose, ' +
+        'and there are about ' + Math.floor(checks.totalMassMg / checks.doseMassMg) +
+        ' of them in ' + fmtMassMg(checks.totalMassMg) + ' of powder.' });
+    }
+
+    /* ---- a filler that is not inert ---- */
+    fillers.forEach(function (f) {
+      if (!f.drug) return;
+      if (f.drug.id === 'lactose') {
+        out.push({ level: 'info', text:
+          'Lactose is the standard bulking agent and is fine for most people, but it is a ' +
+          'sugar: someone lactose intolerant will get the gastrointestinal effects at gram ' +
+          'quantities. Mannitol and microcrystalline cellulose avoid that.' });
+      }
+    });
+
+    /* ---- potent compounds are the ones this is for, and the ones it can ruin ---- */
+    actives.forEach(function (a) {
+      if (!(a.perDoseMg > 0) || !a.commonDoseMg) return;
+      if (a.perDoseMg > a.commonDoseMg * 3) {
+        out.push({ level: 'danger', text:
+          'A ' + fmtMassMg(checks.doseMassMg) + ' portion delivers ' + fmtMassMg(a.perDoseMg) +
+          ' of ' + a.drugName + ', which is more than three times a common dose. Check the ' +
+          'masses — the usual cause is the filler being far too little for the active.' });
+      }
+    });
+
+    if (findings && findings.length) {
+      out.push({ level: 'warn', text:
+        'More than one active in the same powder means every portion carries all of them in ' +
+        'the same ratio, so the combination cannot be adjusted afterwards. The interaction ' +
+        'findings below apply to every dose taken from this jar.' });
+    }
+
+    return out;
+  }
+
+  /** mg, µg or g, whichever reads without a row of zeros. */
+  function fmtMassMg(mg) {
+    if (mg == null || !isFinite(mg)) return '—';
+    if (mg >= 1000) return +(mg / 1000).toFixed(mg >= 10000 ? 0 : 2) + ' g';
+    if (mg >= 1) return +mg.toFixed(mg >= 100 ? 0 : 1) + ' mg';
+    return +(mg * 1000).toFixed(0) + ' µg';
+  }
+
   function compute(items, opts) {
     opts = opts || {};
+    var dry = !!opts.dry;
     var doseMl = opts.doseMl > 0 ? opts.doseMl : 1;
+    var doseMassMg = opts.doseMassMg > 0 ? opts.doseMassMg : 100;
 
     items = items || [];
-    var solventItems = items.filter(function (i) { return i.kind === 'solvent'; });
+    // A dry mixture has no solvent by definition. Anything marked as one is
+    // ignored rather than silently folded into the solids, and named in the
+    // warnings so the discrepancy is visible.
+    var solventItems = dry ? [] : items.filter(function (i) { return i.kind === 'solvent'; });
+    var straySolvents = dry ? items.filter(function (i) { return i.kind === 'solvent'; }) : [];
     var ingredients = items.filter(function (i) { return i.kind !== 'solvent'; });
 
     var bl = blendFromMass(solventItems.map(function (i) {
@@ -496,11 +651,22 @@
     });
     var volumeMl = solventVolumeMl + soluteVolumeMl;
 
+    // Needed before the rows, because each row's share of a dry dose is its
+    // share of this.
+    var dryTotalMassMg = ingredients.reduce(function (a, i) {
+      return a + (toMg(i.amount, i.unit) || 0);
+    }, 0);
+
     var rows = ingredients.map(function (ing) {
       var drug = DB.get(ing.drugId);
       var totalMg = toMg(ing.amount, ing.unit);
       var concMgMl = totalMg / volumeMl;
-      var perDoseMg = concMgMl * doseMl;
+      // Dry: a dose is a weighed portion of the whole solid, so what it
+      // carries is this ingredient's share of the total mass. Wet: it is a
+      // measured volume, so what it carries follows the concentration.
+      var perDoseMg = dry
+        ? (dryTotalMassMg > 0 ? (totalMg / dryTotalMassMg) * doseMassMg : 0)
+        : concMgMl * doseMl;
       var route = ing.route || (drug ? Object.keys(drug.routes)[0] : 'oral');
 
       var tier = drug ? PK.doseTier(drug, route, perDoseMg) : { tier: 'unknown', ratio: null };
@@ -514,6 +680,7 @@
 
       return {
         drug: drug,
+        drugName: drug ? drug.name : ing.drugId,
         drugId: ing.drugId,
         route: route,
         inactive: !!(drug && drug.inactive),
@@ -524,6 +691,10 @@
         densityGMl: sdRow.value,
         densityAssumed: sdRow.assumed,
         concMgMl: concMgMl,
+        // mg of this ingredient per gram of finished powder — the dry
+        // equivalent of a concentration, and the number you would write on
+        // the jar.
+        mgPerG: dryTotalMassMg > 0 ? (totalMg / dryTotalMassMg) * 1000 : 0,
         perDoseMg: perDoseMg,
         tier: tier.tier,
         doseRatio: common ? perDoseMg / common : null,
@@ -567,7 +738,35 @@
       solventDose.fraction += c.fraction * strength;
     });
 
+    /* ---- dry-specific checks ----
+       Two questions, and the second is the one that hurts people. Can this
+       dose actually be weighed? And is the powder mixed well enough for the
+       weighed portion to mean anything? */
+    var dryChecks = null;
+    if (dry) {
+      var activeRows = rows.filter(function (r) { return !r.inactive; });
+      var fillerMassMg = rows.reduce(function (a, r) { return a + (r.inactive ? r.totalMg : 0); }, 0);
+      var strongest = activeRows.slice().sort(function (a, b) { return b.perDoseMg - a.perDoseMg; })[0];
+      dryChecks = {
+        totalMassMg: dryTotalMassMg,
+        doseMassMg: doseMassMg,
+        fillerMassMg: fillerMassMg,
+        // 1 part active to N parts everything else. The number people quote.
+        dilutionRatio: activeMassMg > 0 ? dryTotalMassMg / activeMassMg : null,
+        scaleErrorFraction: doseMassMg > 0 ? SCALE_RESOLUTION_MG / doseMassMg : null,
+        // What a scale-sized error does to the strongest active in the dose,
+        // which is what the error actually costs.
+        activeErrorMg: strongest && doseMassMg > 0
+          ? strongest.perDoseMg * (SCALE_RESOLUTION_MG / doseMassMg) : null,
+        strongest: strongest || null
+      };
+    }
+
     return {
+      dry: dry,
+      doseMassMg: doseMassMg,
+      dryChecks: dryChecks,
+      straySolvents: straySolvents,
       rows: rows,
       blend: bl,
       solvent: bl,                       // alias: reports read `.name`/`.density`
@@ -587,19 +786,25 @@
       // The density of the finished solution, not of the solvent blend. These
       // diverge sharply once a lot of solid is dissolved.
       solutionDensity: volumeMl > 0 ? (bl.totalMassG + totalMassMg / 1000) / volumeMl : null,
-      dosesAvailable: doseMl > 0 ? volumeMl / doseMl : 0,
+      dosesAvailable: dry
+        ? (doseMassMg > 0 ? dryTotalMassMg / doseMassMg : 0)
+        : (doseMl > 0 ? volumeMl / doseMl : 0),
       totalConcMgMl: totalMassMg / volumeMl,
       freezing: freezePoint(bl, rows, volumeMl),
       ph: estimatePh(bl, rows),
       saturation: saturationCheck(bl, rows, volumeMl),
       findings: findings,
-      warnings: (noSolvent
-        ? [{ level: 'warn', text: 'No solvent added yet — add one (water, ethanol, PG…) by mass and the volume, concentration and per-dose amounts will follow from it.' }]
-        : []
-      ).concat(blendWarnings(bl, doseMl), buildWarnings(rows, volumeMl, doseMl, bl, solventDose),
-               freezeWarnings(freezePoint(bl, rows, volumeMl)),
-               saturationWarnings(saturationCheck(bl, rows, volumeMl)),
-               phWarnings(estimatePh(bl, rows)))
+      // Freezing point, pH, saturation and solvent toxicity are all
+      // properties of a liquid. A dry mixture gets its own set instead.
+      warnings: dry
+        ? dryWarnings(rows, dryChecks, straySolvents, findings)
+        : (noSolvent
+            ? [{ level: 'warn', text: 'No solvent added yet — add one (water, ethanol, PG…) by mass and the volume, concentration and per-dose amounts will follow from it.' }]
+            : []
+          ).concat(blendWarnings(bl, doseMl), buildWarnings(rows, volumeMl, doseMl, bl, solventDose),
+                   freezeWarnings(freezePoint(bl, rows, volumeMl)),
+                   saturationWarnings(saturationCheck(bl, rows, volumeMl)),
+                   phWarnings(estimatePh(bl, rows)))
     };
   }
 
@@ -1016,26 +1221,51 @@
     var line = function (s) { L.push(s == null ? '' : s); };
     var rule = function (ch) { line(new Array(79).join(ch || '-')); };
 
-    rule('=');
-    line('SOLUTION BREAKDOWN');
-    rule('=');
-    line('');
     var bl = result.blend;
-    line('Solvent system      : ' + bl.name);
-    line('Total volume        : ' + result.volumeMl.toFixed(2) + ' ml  (from solvent masses)');
-    line('Dose volume         : ' + result.doseMl + ' ml');
-    line('Doses in solution   : ' + (Math.floor(result.dosesAvailable * 10) / 10));
-    line('Total active mass   : ' + Potency.fmtMg(result.totalMassMg));
-    line('Total concentration : ' + Potency.fmtConc(result.totalConcMgMl));
-    line('Blend density       : ' + bl.density.toFixed(3) + ' g/ml');
-    line('Solvency ceiling    : ~' + Math.round(bl.maxMgMl) + ' mg/ml (approximate)');
-    if (result.solventDose && result.solventDose.drug) {
-      var gp = result.solventDose.gramsPerDose;
-      line('Ethanol per dose    : ' + (gp < 1 ? (gp * 1000).toFixed(0) + ' mg' : gp.toFixed(2) + ' g') +
-           '  (psychoactive)');
-    }
-    line('');
 
+    if (result.dry) {
+      // A dry mixture has no volume, no density and no solvent to describe,
+      // so the header reports the two things that do govern it: what the
+      // powder is made of and how much of it a dose weighs.
+      rule('=');
+      line('DRY MIXTURE BREAKDOWN');
+      rule('=');
+      line('');
+      line('Total mass          : ' + Potency.fmtMg(result.totalMassMg));
+      line('Dose mass           : ' + Potency.fmtMg(result.doseMassMg) + '  (weighed portion)');
+      line('Doses in mixture    : ' + (Math.floor(result.dosesAvailable * 10) / 10));
+      line('Total active mass   : ' + Potency.fmtMg(result.activeMassMg));
+      if (result.dryChecks && result.dryChecks.dilutionRatio) {
+        line('Dilution            : 1 part active to ' +
+             (result.dryChecks.dilutionRatio - 1).toFixed(1) + ' parts everything else');
+      }
+      if (result.dryChecks && result.dryChecks.scaleErrorFraction != null) {
+        line('Scale error         : ±' + Math.round(result.dryChecks.scaleErrorFraction * 100) +
+             '% of a dose, assuming ±5 mg');
+      }
+      line('');
+    } else {
+      rule('=');
+      line('SOLUTION BREAKDOWN');
+      rule('=');
+      line('');
+      line('Solvent system      : ' + bl.name);
+      line('Total volume        : ' + result.volumeMl.toFixed(2) + ' ml  (from solvent masses)');
+      line('Dose volume         : ' + result.doseMl + ' ml');
+      line('Doses in solution   : ' + (Math.floor(result.dosesAvailable * 10) / 10));
+      line('Total active mass   : ' + Potency.fmtMg(result.totalMassMg));
+      line('Total concentration : ' + Potency.fmtConc(result.totalConcMgMl));
+      line('Blend density       : ' + bl.density.toFixed(3) + ' g/ml');
+      line("Solvency ceiling    : ~" + Math.round(bl.maxMgMl) + ' mg/ml (approximate)');
+      if (result.solventDose && result.solventDose.drug) {
+        var gp = result.solventDose.gramsPerDose;
+        line('Ethanol per dose    : ' + (gp < 1 ? (gp * 1000).toFixed(0) + ' mg' : gp.toFixed(2) + ' g') +
+             '  (psychoactive)');
+      }
+      line('');
+    }
+
+    if (!result.dry) {
     rule('=');
     line('SOLVENT SYSTEM');
     rule('=');
@@ -1059,27 +1289,28 @@
       (c.solvent.hazards || []).forEach(function (hz) { wrapInto(L, hz, '    ! ', 74); });
       line('');
     });
+    }
 
     rule('=');
     line('INGREDIENTS');
     rule('=');
     line('');
     line(pad('SUBSTANCE', 22) + padL('TOTAL', 11) + padL('% MASS', 9) +
-         padL('CONC', 13) + padL('PER DOSE', 12) + '  TIER');
+         padL(result.dry ? 'PER GRAM' : 'CONC', 13) + padL('PER DOSE', 12) + '  TIER');
     rule('-');
     result.rows.forEach(function (r) {
       line(
         pad(r.drug ? r.drug.name : r.drugId, 22) +
         padL(Potency.fmtMg(r.totalMg), 11) +
         padL((r.massFraction * 100).toFixed(1) + '%', 9) +
-        padL(Potency.fmtConc(r.concMgMl), 13) +
+        padL(result.dry ? Potency.fmtMg(r.mgPerG) : Potency.fmtConc(r.concMgMl), 13) +
         padL(Potency.fmtMg(r.perDoseMg), 12) + '  ' + r.tier
       );
     });
     line('');
 
     rule('=');
-    line('PER DOSE (' + result.doseMl + ' ml)');
+    line('PER DOSE (' + (result.dry ? Potency.fmtMg(result.doseMassMg) + ' portion' : result.doseMl + ' ml') + ')');
     rule('=');
     result.rows.forEach(function (r) {
       var d = r.drug;

@@ -19,8 +19,17 @@
     compareAdded: [],
     nowPage: 'board',
     showMetabolites: true,
+    // Timeline: when set, only this substance and what it turned into are
+    // drawn. Not persisted — it is a way of looking at the current picture,
+    // not a preference about all of them.
+    timelineFocus: null,
     drugPage: 'opioid',
     drugQuery: '',
+    // Substance browser: how the list is ordered, and whether it is narrowed
+    // to compounds whose figures were actually measured in humans.
+    drugSort: ['name', 'half-life', 'confidence'].indexOf(Store.getPrefs().drugSort) >= 0
+      ? Store.getPrefs().drugSort : 'name',
+    drugMeasuredOnly: Store.getPrefs().drugMeasuredOnly === true,
     historyQuery: '',
     faqQuery: '',
     historyLimit: Store.getPrefs().historyLimit != null ? Store.getPrefs().historyLimit : 5,
@@ -417,15 +426,32 @@
   function renderNow(root) {
     var now = Date.now();
 
+    if (hasExample()) root.appendChild(exampleBanner());
+
+    /* The header used to carry the same three controls on all four pages,
+       including the two where two of them do nothing: the Separate/Combined
+       switch has no effect on Steady state or Dose history, and a clock
+       ticking above a hypothetical schedule is noise. A control that is
+       visible but inert is worse than one that is absent — it invites a click
+       and then ignores it.
+
+       (The label on the switch used to read "Display doses / metabolites",
+       which made it look like a choice between the two. It has never been
+       that: it decides whether repeat doses of one substance are drawn as one
+       shape or as several.) */
+    var showsClock = state.nowPage === 'board';
+    var showsMode = state.nowPage === 'board' || state.nowPage === 'timeline';
+
     root.appendChild(h('div', { class: 'section-head' }, [
-      h('h2', { text: 'Now' }),
+      h('h2', {}, ['Now', helpLink('The Now tab')]),
       h('div', { class: 'row-actions' }, [
-        h('span', { class: 'muted small', text: new Date(now).toLocaleString() }),
-        // One control for the whole tab, sitting where the tab starts rather
-        // than buried next to the one chart it used to affect.
-        h('span', { class: 'mode-label', text: 'Display doses / metabolites' }),
-        timelineModePicker(),
-        h('button', { class: 'btn primary', text: '+ New log', onclick: openLogModal })
+        showsClock ? h('span', {
+          class: 'muted small', title: 'Everything on this page is modelled for this moment.',
+          text: Charts.fmtDayClock(now)
+        }) : null,
+        showsMode ? h('span', { class: 'mode-label', text: 'Repeat doses' }) : null,
+        showsMode ? timelineModePicker() : null,
+        h('button', { class: 'btn primary', text: '+ New log', title: 'Log a dose  (N)', onclick: openLogModal })
       ])
     ]));
 
@@ -467,9 +493,27 @@
 
 
     if (!active.length) {
-      root.appendChild(h('div', { class: 'empty' }, [
-        h('p', { text: 'Nothing estimated to be active right now.' }),
-        h('p', { class: 'muted', text: 'Log a dose to see half-life curves, timelines and interaction warnings.' })
+      var logged = Store.load().length;
+      root.appendChild(h('div', { class: 'empty empty-lead' }, [
+        h('h3', { class: 'empty-title', text: logged
+          ? 'Nothing is estimated to be active right now.'
+          : 'Nothing logged yet.' }),
+        h('p', { class: 'muted', text: logged
+          ? 'Everything you have logged has cleared, along with anything it turned into. ' +
+            'The dose history and the patterns are still there.'
+          : 'Log a dose and this page fills in: how much is left, what it has turned into, ' +
+            'when it clears, and what it would clash with.' }),
+        h('div', { class: 'empty-actions' }, [
+          h('button', { class: 'btn primary', text: '+ Log a dose', onclick: openLogModal }),
+          h('button', {
+            class: 'btn', text: logged ? 'Dose history' : 'Browse 649 substances',
+            onclick: function () { logged ? goTab('now', 'history') : goTab('drugs'); }
+          })
+        ]),
+        h('p', { class: 'empty-hint muted small' }, [
+          'Press ', h('kbd', { text: 'N' }), ' to log without reaching for the mouse, or ',
+          h('kbd', { text: 'Ctrl' }), ' ', h('kbd', { text: 'K' }), ' to search every compound.'
+        ])
       ]));
     } else {
       var grid = h('div', { class: 'card-grid' });
@@ -970,7 +1014,7 @@
         yFormat: function (v) { return Math.round((v / peakParent) * 100) + '%'; },
         // A tick per dose, so the second climb on the parent line is visibly
         // a redose rather than an unexplained bump.
-        markers: curves.map(function (cc) { return { tMs: cc.entry.timeMs, color: '#888' }; })
+        markers: curves.map(function (cc) { return { tMs: cc.entry.timeMs, color: Charts.token('--text-faint', '#888') }; })
       })
     ]));
     body.appendChild(h('div', { class: 'legend' }, series.map(function (s) {
@@ -1427,8 +1471,13 @@
    * a modal from the Now tab rather than owning a tab of its own. Logging a
    * dose is a moment's task; it does not need a permanent home in the nav.
    */
-  function logFormEl() {
+  function logFormEl(prefill, editing) {
     var form = h('form', { class: 'log-form', onsubmit: onSubmitLog });
+    // Empty for a new dose, the entry's id when an existing one is being
+    // changed. onSubmitLog reads it to decide between add and update, so the
+    // two paths share every field and every validation below.
+    var logId = h('input', { type: 'hidden', id: 'f-log-id', value: editing ? editing.id : '' });
+    form.appendChild(logId);
 
     var drugInput = h('input', {
       type: 'text', id: 'f-drug', placeholder: 'Search substances…',
@@ -1509,20 +1558,406 @@
     form.appendChild(h('div', { class: 'field wide' }, [h('label', { for: 'f-notes', text: 'Notes' }), notesInput]));
     form.appendChild(h('div', { class: 'field wide' }, [doseHint]));
     form.appendChild(h('div', { class: 'field wide' }, [
-      h('button', { type: 'submit', class: 'btn primary', text: 'Add to log' })
+      h('button', { type: 'submit', class: 'btn primary', text: editing ? 'Save changes' : 'Add to log' })
     ]));
+
+    /* Opened from a substance page, the compound is already known — filling
+       it in saves retyping a name the reader was looking at a second ago,
+       and it brings the dose ladder for that compound up with it. Routes and
+       units have to be synced after the fields are in the form, since
+       syncRoutes writes into the route select. */
+    if (prefill) {
+      drugInput.value = prefill.name;
+      hidden.value = prefill.id;
+      syncRoutes(prefill);
+    }
+
+    /* Editing an existing dose: every field starts as what was actually
+       logged, not as a fresh form.
+       This has to run AFTER syncRoutes, and the order inside it matters too.
+       syncRoutes rebuilds the route options, and syncDoseHint writes the
+       ladder's own unit into the unit select — so a route and unit restored
+       before either of those ran would be silently overwritten by a default.
+       Restoring the route first, then re-syncing the hint against it, then
+       putting the logged amount and unit back on top, is the only ordering
+       where what the reader sees is what they recorded. */
+    if (editing) {
+      var hasRoute = Array.prototype.some.call(routeSel.options, function (o) {
+        return o.value === editing.route;
+      });
+      if (hasRoute) routeSel.value = editing.route;
+      syncDoseHint();
+      amountInput.value = editing.amount;
+      // A unit the select does not offer — an old entry, or one imported from
+      // elsewhere — is added rather than dropped. Silently rewriting µg to mg
+      // would change the dose by a thousandfold on save.
+      var hasUnit = Array.prototype.some.call(unitSel.options, function (o) {
+        return o.value === editing.unit;
+      });
+      if (!hasUnit && editing.unit) {
+        unitSel.appendChild(h('option', { value: editing.unit, text: editing.unit }));
+      }
+      unitSel.value = editing.unit;
+      timeInput.value = localISO(new Date(editing.timeMs));
+      notesInput.value = editing.notes || '';
+    }
 
     return form;
   }
 
-  function openLogModal() {
+  /**
+   * @param {string=} drugId  Opens with this compound already selected.
+   *   Guarded with a typeof test because this is also used directly as a
+   *   click handler, which would otherwise hand it a MouseEvent.
+   */
+  function openLogModal(drugId, mode) {
+    var pre = typeof drugId === 'string' ? DB.get(drugId) : null;
+    // A metabolite is formed, not taken: it has no route to log against.
+    if (pre && (pre.formedInVivo || !Object.keys(pre.routes).length)) pre = null;
+
+    var current = (typeof mode === 'string' && mode === 'solution') ? 'solution' : 'substance';
+    var pane = h('div', { class: 'log-pane' });
+    var heading = h('h2', {});
+
+    /* Two ways a dose reaches the log, and they are genuinely different
+       shapes rather than one form with a checkbox. A substance dose is one
+       compound and one amount. A dose of a mixture is a volume that carries
+       several compounds at once, and the arithmetic turning that volume into
+       milligrams is the whole point of the Solution tab — so the log borrows
+       it rather than asking anyone to do it twice by hand. */
+    var seg = h('div', { class: 'seg' }, [
+      ['Substance', 'substance', 'One compound, one amount.'],
+      ['Solution', 'solution', 'A measured dose of a mixture, split into what it delivers of each active in it.']
+    ].map(function (m) {
+      return h('button', {
+        type: 'button',
+        class: 'seg-btn' + (current === m[1] ? ' active' : ''),
+        title: m[2],
+        onclick: function () {
+          if (current === m[1]) return;
+          current = m[1];
+          Array.prototype.forEach.call(seg.children, function (b, i) {
+            b.classList.toggle('active', i === (current === 'substance' ? 0 : 1));
+          });
+          paint();
+        }
+      }, [m[0]]);
+    }));
+
+    function paint() {
+      pane.innerHTML = '';
+      if (current === 'solution') {
+        heading.textContent = 'Log a dose of a mixture';
+        pane.appendChild(solutionLogFormEl());
+        return;
+      }
+      heading.textContent = pre ? 'Log a dose of ' + pre.name : 'Log a dose';
+      pane.appendChild(logFormEl(pre));
+      // With the substance already known, the amount is the next unknown.
+      var focusOn = pane.querySelector(pre ? '#f-amount' : '#f-drug');
+      if (focusOn) focusOn.focus();
+    }
+
+    var body = h('div', { class: 'log-modal' }, [heading, seg, pane]);
+    paint();
+    openModal(body);
+    var initial = body.querySelector(current === 'solution' ? '.sol-log-count' : (pre ? '#f-amount' : '#f-drug'));
+    if (initial) initial.focus();
+  }
+
+  /**
+   * Change a dose that is already logged.
+   *
+   * Deliberately the same form as logging one, in the same modal, with the
+   * same validation — a correction is not a different kind of act from the
+   * original entry, and a second form would be a second place for the two to
+   * drift apart.
+   */
+  function openEditLogModal(entry) {
+    var d = DB.get(entry.drugId);
     var body = h('div', { class: 'log-modal' }, [
-      h('h2', { text: 'Log a dose' }),
-      logFormEl()
+      h('h2', { text: 'Edit ' + (d ? d.name : entry.drugId) }),
+      h('p', { class: 'muted small', text:
+        'Logged ' + Charts.fmtDayClock(entry.timeMs) + '. Changing the amount or the time moves ' +
+        'this dose on every curve it appears in.' }),
+      logFormEl(d && !d.formedInVivo && Object.keys(d.routes).length ? d : null, entry)
     ]);
     openModal(body);
-    var first = body.querySelector('#f-drug');
-    if (first) first.focus();
+    var focusOn = body.querySelector('#f-amount');
+    if (focusOn) { focusOn.focus(); focusOn.select(); }
+  }
+
+  /* ---------- logging a dose of a mixture --------------------------------- */
+
+  /**
+   * Pick a unit that makes the number readable.
+   *
+   * A mixture dose lands anywhere from 40 µg of a lysergamide to 8 g of
+   * ethanol, and writing either of those in milligrams gives a log row that
+   * has to be decoded before it can be read. The stored amountMg is identical
+   * whichever unit is chosen — Store.toMg converts it back — so this is
+   * presentation, and it is safe to pick freely.
+   */
+  function readableAmount(mg) {
+    if (!(mg > 0)) return { amount: 0, unit: 'mg' };
+    if (mg >= 1000) return { amount: +(mg / 1000).toPrecision(4), unit: 'g' };
+    if (mg < 1) return { amount: +(mg * 1000).toPrecision(4), unit: 'µg' };
+    return { amount: +mg.toPrecision(4), unit: 'mg' };
+  }
+
+  /**
+   * The recipes a dose can be logged from: whatever the Solution tab is
+   * currently working on, plus everything saved.
+   */
+  function logRecipes() {
+    var out = [{
+      key: '__working',
+      name: solutionState.dry ? 'Working dry mix' : 'Working mixture',
+      working: true,
+      items: solutionState.items,
+      dry: !!solutionState.dry,
+      doseMl: solutionState.doseMl,
+      doseMassMg: solutionState.doseMassMg
+    }];
+    loadSolutions().forEach(function (s) {
+      out.push({
+        key: s.id, name: s.name, items: s.items || [],
+        dry: !!s.dry, doseMl: s.doseMl, doseMassMg: s.doseMassMg
+      });
+    });
+    return out;
+  }
+
+  /**
+   * Split a computed mixture into the log entries one dose of it would make.
+   *
+   * Fillers and solvents are not logged — lactose has no curve — but they are
+   * counted and reported, because a mixture that logs two of its five
+   * ingredients should say which three it left out rather than let someone
+   * conclude the other three were forgotten.
+   *
+   * Ethanol carried by the solvent is included deliberately. A 1 ml dose of a
+   * water-based solution carries none worth logging, and a 20 ml dose of
+   * something cut with spirits carries a real drink — the calculator already
+   * works that out, and dropping it here would make the log quietly wrong in
+   * exactly the case where the interaction matters most.
+   */
+  function mixtureLogRows(res) {
+    var rows = [], skipped = [];
+    res.rows.forEach(function (r) {
+      var d = r.drug;
+      if (!d) { skipped.push({ name: r.drugName, why: 'not in the database' }); return; }
+      if (r.inactive) { skipped.push({ name: d.name, why: 'inactive' }); return; }
+      if (d.formedInVivo || !Object.keys(d.routes).length) {
+        skipped.push({ name: d.name, why: 'no route to log against' });
+        return;
+      }
+      if (!(r.perDoseMg > 0)) { skipped.push({ name: d.name, why: 'nothing in a dose' }); return; }
+      rows.push({
+        drug: d,
+        route: d.routes[r.route] ? r.route : Object.keys(d.routes)[0],
+        mg: r.perDoseMg
+      });
+    });
+
+    var sd = res.solventDose;
+    if (sd && sd.drug && sd.gramsPerDose > 0) {
+      var sdd = sd.drug;
+      if (!sdd.formedInVivo && Object.keys(sdd.routes).length) {
+        rows.push({
+          drug: sdd,
+          route: sdd.routes.oral ? 'oral' : Object.keys(sdd.routes)[0],
+          mg: sd.gramsPerDose * 1000,
+          fromSolvent: true
+        });
+      }
+    }
+    return { rows: rows, skipped: skipped };
+  }
+
+  /**
+   * The dose-of-a-mixture form.
+   *
+   * Everything below the recipe picker is derived: the reader chooses which
+   * mixture and how many doses, and the form shows exactly what will be
+   * written to the log before it writes any of it. That preview is the point.
+   * One measured volume becoming four separate log entries is a surprising
+   * enough thing for an app to do that it should never happen unseen.
+   */
+  function solutionLogFormEl() {
+    var recipes = logRecipes();
+    var form = h('form', { class: 'log-form sol-log' });
+
+    var pick = h('select', { class: 'sol-log-source' }, recipes.map(function (r) {
+      return h('option', { value: r.key, text: r.name + (r.working ? ' (Solution tab)' : '') });
+    }));
+    var countInput = h('input', {
+      type: 'number', class: 'sol-log-count', step: 'any', min: '0.01', value: '1'
+    });
+    var timeInput = h('input', { type: 'datetime-local', class: 'sol-log-time', value: localISO(new Date()) });
+    var notesInput = h('input', { type: 'text', class: 'sol-log-notes', placeholder: 'Context, setting, how it felt…' });
+    var preview = h('div', { class: 'sol-log-preview' });
+
+    function currentRecipe() {
+      var hit = null;
+      recipes.forEach(function (r) { if (r.key === pick.value) hit = r; });
+      return hit;
+    }
+
+    function doseText(rec, count) {
+      var one = rec.dry ? Potency.fmtMg(rec.doseMassMg || 0) : (rec.doseMl || 0) + ' ml';
+      return count === 1 ? one : (+count.toPrecision(4)) + ' × ' + one;
+    }
+
+    function paint() {
+      preview.innerHTML = '';
+      var rec = currentRecipe();
+      if (!rec) return;
+      var count = parseFloat(countInput.value);
+      if (!(count > 0)) count = 1;
+
+      var res = Solution.compute(rec.items, {
+        dry: rec.dry, doseMl: rec.doseMl, doseMassMg: rec.doseMassMg
+      });
+      var split = mixtureLogRows(res);
+
+      preview.appendChild(h('p', { class: 'muted small', text:
+        doseText(rec, count) + ' of ' + rec.name + (rec.dry ? ' (weighed)' : '') + '.' }));
+
+      if (!split.rows.length) {
+        preview.appendChild(h('div', { class: 'empty small' }, [
+          h('p', { text: 'Nothing in this mixture can be logged — it has no active ingredient with a route.' }),
+          h('button', {
+            type: 'button', class: 'btn small',
+            text: 'Open the Solution tab', onclick: function () { closeModal(); goTab('solution'); }
+          })
+        ]));
+        return;
+      }
+
+      /* "Per dose" only earns a column when it differs from what gets logged.
+         At one dose the two are the same quantity, and printing it twice —
+         rounded two different ways, as it was — reads as a discrepancy rather
+         than as a multiplier of one. */
+      var showPer = count !== 1;
+      var cols = showPer ? ['Substance', 'Route', 'Per dose', 'Logged', 'Tier']
+                         : ['Substance', 'Route', 'Logged', 'Tier'];
+      var tbl = h('table', { class: 'log-table' }, [
+        h('thead', {}, [h('tr', {}, cols.map(function (t) { return h('th', { text: t }); }))])
+      ]);
+      var tb = h('tbody');
+      split.rows.forEach(function (r) {
+        var totalMg = r.mg * count;
+        var ra = readableAmount(totalMg);
+        var per = readableAmount(r.mg);
+        var tier = PK.doseTier(r.drug, r.route, totalMg).tier;
+        tb.appendChild(h('tr', {}, [
+          h('td', {}, [
+            h('span', { text: r.drug.name }),
+            r.fromSolvent ? h('span', { class: 'tag-chip', title:
+              'Carried by the solvent rather than added as an ingredient.', text: 'solvent' }) : null
+          ]),
+          h('td', { text: r.route }),
+          showPer ? h('td', { text: per.amount + ' ' + per.unit }) : null,
+          h('td', { text: ra.amount + ' ' + ra.unit }),
+          h('td', {}, [h('span', { class: 'pill tier-' + tier, text: tier })])
+        ]));
+      });
+      tbl.appendChild(tb);
+      preview.appendChild(h('div', { class: 'table-wrap' }, [tbl]));
+
+      if (split.skipped.length) {
+        preview.appendChild(h('p', { class: 'muted small', text:
+          'Not logged: ' + split.skipped.map(function (s) {
+            return s.name + ' (' + s.why + ')';
+          }).join(', ') + '.' }));
+      }
+
+      preview.appendChild(h('p', { class: 'muted small', text:
+        split.rows.length === 1
+          ? 'One entry will be added to the log.'
+          : split.rows.length + ' separate entries will be added, one per active, all at the same time. ' +
+            'They can be edited or deleted individually afterwards.' }));
+    }
+
+    pick.addEventListener('change', paint);
+    countInput.addEventListener('input', paint);
+
+    form.appendChild(h('div', { class: 'field wide' }, [
+      h('label', { text: 'Mixture' }), pick
+    ]));
+    form.appendChild(h('div', { class: 'field' }, [
+      h('label', { text: 'Doses taken' }), countInput
+    ]));
+    form.appendChild(h('div', { class: 'field' }, [
+      h('label', { text: 'Time' }), timeInput
+    ]));
+    form.appendChild(h('div', { class: 'field wide' }, [
+      h('label', { text: 'Notes' }), notesInput
+    ]));
+    form.appendChild(h('div', { class: 'field wide' }, [preview]));
+    form.appendChild(h('div', { class: 'field wide' }, [
+      h('button', { type: 'submit', class: 'btn primary', text: 'Add to log' })
+    ]));
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var rec = currentRecipe();
+      if (!rec) return;
+      var count = parseFloat(countInput.value);
+      if (!(count > 0)) {
+        UI.toast('Enter how many doses were taken.', { kind: 'warn' });
+        countInput.focus(); countInput.select();
+        return;
+      }
+      var res = Solution.compute(rec.items, {
+        dry: rec.dry, doseMl: rec.doseMl, doseMassMg: rec.doseMassMg
+      });
+      var split = mixtureLogRows(res);
+      if (!split.rows.length) {
+        UI.toast('Nothing in that mixture can be logged.', { kind: 'warn' });
+        return;
+      }
+
+      var timeMs = new Date(timeInput.value).getTime() || Date.now();
+      var userNotes = String(notesInput.value || '').trim();
+      // The mixture and the measure go into every entry's notes. Six months
+      // later a bare "1.2 mg alprazolam" in the history says nothing about
+      // where it came from, and the entries are individually editable, so
+      // there is no other thread tying them back together.
+      var provenance = rec.name + ' · ' + doseText(rec, count);
+      var added = [];
+      split.rows.forEach(function (r) {
+        var ra = readableAmount(r.mg * count);
+        var entry = {
+          drugId: r.drug.id,
+          route: r.route,
+          amount: ra.amount,
+          unit: ra.unit,
+          timeMs: timeMs,
+          notes: [userNotes, provenance].filter(Boolean).join(' · ')
+        };
+        Store.add(entry);
+        added.push(entry.id);
+      });
+
+      closeModal();
+      state.tab = 'now';
+      render();
+      UI.toast('Logged ' + added.length + ' entr' + (added.length === 1 ? 'y' : 'ies') +
+        ' from ' + rec.name, {
+        kind: 'ok',
+        actionLabel: 'Undo',
+        action: function () {
+          added.forEach(function (id) { Store.remove(id); });
+          render();
+          UI.toast('Removed', { kind: 'ok' });
+        }
+      });
+    });
+
+    paint();
+    return form;
   }
 
   /* ---------- dose history: collapsible, filtered, paged ------------------ */
@@ -1643,9 +2078,36 @@
           h('td', { text: l.route }),
           h('td', {}, [h('span', { class: 'pill tier-' + tier, text: tier })]),
           h('td', { class: 'notes', text: l.notes || '' }),
-          h('td', {}, [h('button', {
+          h('td', { class: 'row-tools' }, [h('button', {
+            /* A logged dose is a memory of something that already happened,
+               and memories get corrected — the wrong strength, the wrong
+               route, an hour out because it was typed the next morning. Until
+               this existed the only way to fix any of that was to delete the
+               row and retype it, which loses the entry id and with it the
+               match against any export made before the correction. */
+            class: 'btn tiny', text: 'Edit',
+            onclick: function () { openEditLogModal(l); }
+          }), h('button', {
             class: 'btn tiny danger', text: 'Delete',
-            onclick: function () { Store.remove(l.id); render(); }
+            /* No confirmation dialog. A dose row is small, cheap to
+               re-create, and the undo in the toast is faster to reach than
+               an OK button would have been — and it does not stand between
+               the reader and the twenty rows they actually meant to clear. */
+            onclick: function () {
+              var d2 = DB.get(l.drugId);
+              Store.remove(l.id);
+              render();
+              UI.toast('Deleted ' + (d2 ? d2.name : l.drugId) + ' · ' + fmtDose(l), {
+                actionLabel: 'Undo',
+                action: function () {
+                  var logs = Store.load();
+                  logs.push(l);
+                  Store.save(logs);
+                  render();
+                  UI.toast('Restored', { kind: 'ok' });
+                }
+              });
+            }
           })])
         ]));
       });
@@ -1676,22 +2138,63 @@
     e.preventDefault();
     var id = $('#f-drug-id').value;
     var drug = DB.get(id || $('#f-drug').value);
-    if (!drug) { alert('Substance not recognised. Pick one from the suggestions.'); return; }
+    if (!drug) {
+      UI.toast('Substance not recognised — pick one from the suggestions.', { kind: 'warn' });
+      var fd = $('#f-drug'); if (fd) { fd.focus(); fd.select(); }
+      return;
+    }
     var amount = parseFloat($('#f-amount').value);
-    if (!(amount > 0)) { alert('Enter an amount.'); return; }
-    Store.add({
+    if (!(amount > 0)) {
+      UI.toast('Enter an amount.', { kind: 'warn' });
+      var fa = $('#f-amount'); if (fa) { fa.focus(); fa.select(); }
+      return;
+    }
+    var unit = $('#f-unit').value;
+    var idField = $('#f-log-id');
+    var editId = idField ? idField.value : '';
+    var entry = {
       drugId: drug.id,
       route: $('#f-route').value || Object.keys(drug.routes)[0],
       amount: amount,
-      unit: $('#f-unit').value,
+      unit: unit,
       timeMs: new Date($('#f-time').value).getTime() || Date.now(),
       notes: $('#f-notes').value
-    });
+    };
+
+    if (editId) {
+      /* Editing keeps the entry's id, so anything holding a reference to it
+         still resolves and an export made before the change lines up with one
+         made after. Store.update recomputes amountMg from the new amount and
+         unit — the curves read that, not the display figure, so a correction
+         that skipped it would show the new dose and model the old one.
+
+         The undo carries the whole previous entry rather than a diff. A
+         mistyped correction is exactly as easy to make as the mistype it was
+         fixing, and the way back should not be another round of retyping. */
+      var before = null;
+      Store.load().forEach(function (l) { if (l.id === editId) before = JSON.parse(JSON.stringify(l)); });
+      Store.update(editId, entry);
+      closeModal();
+      render();
+      UI.toast('Updated ' + drug.name + ' · ' + amount + ' ' + unit, {
+        kind: 'ok',
+        actionLabel: before ? 'Undo' : null,
+        action: before ? function () {
+          Store.update(editId, before);
+          render();
+          UI.toast('Reverted', { kind: 'ok' });
+        } : null
+      });
+      return;
+    }
+
+    Store.add(entry);
     // The form lives in a modal now, so dismiss it and land back on Now with
     // the new dose already folded into the curves.
     closeModal();
     state.tab = 'now';
     render();
+    UI.toast('Logged ' + drug.name + ' · ' + amount + ' ' + unit, { kind: 'ok' });
   }
 
   function onImport(e) {
@@ -1701,9 +2204,12 @@
     reader.onload = function () {
       try {
         var n = Store.importJSON(reader.result);
-        alert('Imported ' + n + ' entries.');
         render();
-      } catch (err) { alert('Import failed: ' + err.message); }
+        UI.toast(n ? 'Imported ' + n + ' entries.' : 'Nothing new in that file — every entry was already logged.',
+          { kind: n ? 'ok' : null });
+      } catch (err) {
+        UI.toast('Import failed: ' + err.message, { kind: 'danger', timeout: 6000 });
+      }
     };
     reader.readAsText(file);
   }
@@ -1720,6 +2226,7 @@
     var a = h('a', { href: url, download: name });
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    UI.toast('Saved ' + name, { kind: 'ok' });
   }
 
   /* ======================================================================
@@ -2161,6 +2668,136 @@
     return el;
   }
 
+  /* ---------- the hover readout -------------------------------------------
+
+     What every compound is doing at one moment used to be a legend under the
+     chart: a fixed block, as tall as the number of curves, reporting whatever
+     the scrub cursor was sitting on. On a busy log that was a dozen rows of
+     text pushing the cards off the screen, and it answered for the cursor
+     rather than for wherever you were actually looking.
+
+     It is a tooltip now. Hover the chart, wait a moment, and it appears at
+     the pointer and follows it, reporting the moment under the pointer rather
+     than the moment the cursor is parked at — so the chart can be read
+     without disturbing the cards below, which still answer for the cursor.
+
+     THE DWELL IS DELIBERATE. Appearing instantly means it flashes up every
+     time the pointer crosses the chart on its way somewhere else. Half a
+     second is long enough that only an intentional hover triggers it and
+     short enough not to feel broken.
+     ------------------------------------------------------------------------ */
+
+  var HOVER_DWELL_MS = 500;
+
+  function attachHoverReadout(wrap, svg, series, unit, t0, t1) {
+    /* One element, reused. It lives on <body> so no ancestor can clip it,
+       which means it outlives the view that made it — so any previous one is
+       removed here rather than left to accumulate on every render. */
+    var old = document.getElementById('hover-readout');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var tip = h('div', { class: 'hover-readout', id: 'hover-readout' });
+    document.body.appendChild(tip);
+
+    var timer = null, shown = false, lastX = 0, lastY = 0;
+
+    // Same three readings the legend used, and for the same reason: a figure
+    // in different units to the axis it sits under is a trap.
+    function valueOf(sr, tMs) {
+      if (unit === 'mg' || !sr.plotAt) return sr.amountAt ? sr.amountAt(tMs) : -Infinity;
+      return sr.plotAt(tMs);
+    }
+    function readout(sr, tMs) {
+      if (unit === 'mg' || !sr.plotAt) {
+        if (!sr.amountAt) return '';
+        var mg = sr.amountAt(tMs);
+        return mg > 1e-6 ? Potency.fmtMg(mg) : '—';
+      }
+      var v = sr.plotAt(tMs);
+      if (unit === 'percent') return v >= 0.005 ? Math.round(v * 100) + '%' : '—';
+      var total = series.reduce(function (a, x) {
+        return a + (x.plotAt ? Math.max(0, x.plotAt(tMs)) : 0);
+      }, 0);
+      if (!(total > 0) || v / total < 0.005) return '—';
+      return Math.round(v / total * 100) + '%';
+    }
+
+    function build(tMs) {
+      tip.innerHTML = '';
+      tip.appendChild(h('div', { class: 'hover-time' }, [
+        h('strong', { text: Charts.fmtDayClock(tMs) })
+      ]));
+
+      var rows = series.map(function (sr, i) {
+        return { sr: sr, i: i, text: readout(sr, tMs), v: valueOf(sr, tMs) };
+      }).filter(function (r) {
+        // Only what is actually there, same rule the legend used.
+        return r.text !== '' && r.text !== '\u2014';
+      }).sort(function (a, b) {
+        var av = isFinite(a.v) ? a.v : -Number.MAX_VALUE;
+        var bv = isFinite(b.v) ? b.v : -Number.MAX_VALUE;
+        return (bv - av) || (a.i - b.i);
+      });
+
+      if (!rows.length) {
+        tip.appendChild(h('div', { class: 'muted small', text: 'nothing present at this moment' }));
+        return;
+      }
+      var list = h('div', { class: 'hover-rows' });
+      rows.forEach(function (r) {
+        list.appendChild(h('div', { class: 'hover-row' }, [
+          h('span', { class: 'legend-swatch',
+            style: 'background:' + r.sr.color + (r.sr.dashed ? ';opacity:.55' : '') }),
+          h('span', { class: 'hover-name', text: r.sr.name }),
+          h('span', { class: 'hover-val', text: r.text })
+        ]));
+      });
+      tip.appendChild(list);
+    }
+
+    /* Kept inside the viewport, and flipped to the other side of the pointer
+       rather than allowed to run off the edge — a readout you have to scroll
+       to is not a readout. */
+    function place(x, y) {
+      var pad = 14;
+      var r = tip.getBoundingClientRect();
+      var left = x + pad, top = y + pad;
+      if (left + r.width > window.innerWidth - 8) left = x - r.width - pad;
+      if (top + r.height > window.innerHeight - 8) top = y - r.height - pad;
+      tip.style.left = Math.max(8, left) + 'px';
+      tip.style.top = Math.max(8, top) + 'px';
+    }
+
+    function show(ev) {
+      var r = svg.getBoundingClientRect();
+      var px = ((ev.clientX - r.left) / r.width) * svg.__scale.viewW;
+      var tMs = Math.max(t0, Math.min(t1, svg.__scale.toTime(px)));
+      build(tMs);
+      tip.classList.add('open');
+      shown = true;
+      place(ev.clientX, ev.clientY);
+    }
+
+    function hide() {
+      if (timer) { clearTimeout(timer); timer = null; }
+      tip.classList.remove('open');
+      shown = false;
+    }
+
+    wrap.addEventListener('pointermove', function (ev) {
+      // Touch drives the scrub cursor directly; a tooltip under a finger is
+      // hidden by the finger.
+      if (ev.pointerType === 'touch') return;
+      lastX = ev.clientX; lastY = ev.clientY;
+      if (shown) { show(ev); return; }
+      if (timer) clearTimeout(timer);
+      var e = { clientX: ev.clientX, clientY: ev.clientY };
+      timer = setTimeout(function () { timer = null; show(e); }, HOVER_DWELL_MS);
+    });
+    wrap.addEventListener('pointerleave', hide);
+    wrap.addEventListener('pointerdown', hide);
+
+  }
+
   function renderTimeline(root) {
     var now = Date.now();
     var span = state.windowH * HOUR;
@@ -2196,6 +2833,55 @@
       return;
     }
 
+    /* ---- focus ------------------------------------------------------------
+       With metabolites on, a busy day is thirty-odd curves and the chart draws
+       the eighteen largest of them in ten repeating colours. That is not a
+       chart, it is a plaid. Focusing on one substance draws that substance and
+       the things it turned into, which is three to five lines and legible —
+       and it is the question people actually have ("where is the ketamine",
+       not "where is everything").
+
+       It filters the doses rather than the finished series, so the metabolite
+       curves, the legend, the scrub cards and the hover readout all follow
+       from it without any of them needing to know it exists. */
+    var onBoard = [];
+    var seenFocus = {};
+    visible.forEach(function (c) {
+      if (seenFocus[c.drug.id]) return;
+      seenFocus[c.drug.id] = 1;
+      onBoard.push(c.drug);
+    });
+
+    if (state.timelineFocus && !seenFocus[state.timelineFocus]) state.timelineFocus = null;
+
+    if (onBoard.length > 1) {
+      var focusRow = h('div', { class: 'focus-row' }, [
+        h('span', { class: 'mode-label', text: 'Focus' }),
+        h('button', {
+          class: 'chip clickable' + (state.timelineFocus ? '' : ' chip-on'),
+          title: 'Draw everything on board',
+          onclick: function () { state.timelineFocus = null; render(); }
+        }, ['Everything'])
+      ]);
+
+      onBoard.forEach(function (d) {
+        focusRow.appendChild(h('button', {
+          class: 'chip clickable' + (state.timelineFocus === d.id ? ' chip-on' : ''),
+          title: 'Draw only ' + d.name + ' and what it turns into',
+          onclick: function () {
+            state.timelineFocus = state.timelineFocus === d.id ? null : d.id;
+            render();
+          }
+        }, [d.name]));
+      });
+
+      root.appendChild(focusRow);
+    }
+
+    if (state.timelineFocus) {
+      visible = visible.filter(function (c) { return c.drug.id === state.timelineFocus; });
+    }
+
     /* ---- the doses, as curves rather than bands ---------------------------
        This was a Gantt chart of phase bands: one row per dose, coloured by
        come-up / peak / offset. Bands answer "which phase am I in" but they
@@ -2228,7 +2914,7 @@
     var chart = Charts.lineChart({
       series: tData.series, t0: t0, t1: t1, nowMs: now, cursorMs: state.cursorMs, height: 340,
       yFormat: yFmt,
-      markers: visible.map(function (c) { return { tMs: c.entry.timeMs, color: '#888' }; })
+      markers: visible.map(function (c) { return { tMs: c.entry.timeMs, color: Charts.token('--text-faint', '#888') }; })
     });
     var chartWrap = h('div', { class: 'chart-wrap scrubbable' }, [chart]);
     var detail = h('div', { class: 'scrub-detail' });
@@ -2245,9 +2931,10 @@
     function moveCursor(tMs, rebuild) {
       state.cursorMs = Math.max(t0, Math.min(t1, tMs));
       charts.forEach(function (c) { c.__setCursor(state.cursorMs); });
-      // Declared below; hoisted, and never called before it is assigned.
-      if (legend && legend.__setCursor) legend.__setCursor(state.cursorMs);
+      // All declared below; hoisted, and never called before assignment.
       slider.value = String(state.cursorMs);
+      if (clockEl) paintClock();
+      if (timeInput) timeInput.value = toLocalInput(state.cursorMs);
       if (rebuild !== false) paintDetail();
     }
 
@@ -2274,9 +2961,65 @@
       oninput: function (e) { moveCursor(parseInt(e.target.value, 10)); }
     });
 
+    /* ---- the clock, and a way to type a time into it ---------------------
+       The cursor position used to be readable only as a heading below the
+       chart and reachable only by dragging. Both are now above the chart they
+       control: where you are, in figures big enough to read at a glance, and
+       a field to type a moment into rather than hunting for it with a slider
+       a pixel at a time.
+       -------------------------------------------------------------------- */
+
+    var clockEl = h('div', { class: 'scrub-clock' });
+
+    function paintClock() {
+      var delta = (state.cursorMs - now) / HOUR;
+      var atNow = Math.abs(delta) < 0.02;
+      clockEl.innerHTML = '';
+      clockEl.appendChild(h('span', { class: 'scrub-clock-time',
+        text: Charts.fmtDayClock(state.cursorMs) }));
+      clockEl.appendChild(h('span', { class: 'pill ' + (atNow ? 'ok' : ''),
+        text: atNow ? 'now'
+            : delta > 0 ? 'in ' + Charts.fmtDur(delta)
+                        : Charts.fmtDur(-delta) + ' ago' }));
+    }
+
+    /* `datetime-local` wants a naive LOCAL string and toISOString gives UTC.
+       Feeding it UTC silently shifts the field by the timezone offset, which
+       on a scrub control is the difference between an hour ago and an hour
+       from now. */
+    function toLocalInput(ms) {
+      var d = new Date(ms - new Date(ms).getTimezoneOffset() * 60000);
+      return d.toISOString().slice(0, 16);
+    }
+
+    var timeInput = h('input', {
+      type: 'datetime-local', class: 'scrub-time',
+      min: toLocalInput(t0), max: toLocalInput(t1),
+      value: toLocalInput(state.cursorMs),
+      title: 'Jump to a moment. Anything outside the visible window is clamped to its edge — widen the window to reach further.',
+      onchange: function (e) {
+        var ms = new Date(e.target.value).getTime();
+        if (isFinite(ms)) moveCursor(ms);
+        else timeInput.value = toLocalInput(state.cursorMs);
+      }
+    });
+
+    root.appendChild(h('div', { class: 'scrub-bar scrub-bar-top' }, [
+      clockEl,
+      h('button', { class: 'btn small', text: '\u27f5 15m',
+        onclick: function () { moveCursor(state.cursorMs - 15 * 60000); } }),
+      slider,
+      h('button', { class: 'btn small', text: '15m \u27f6',
+        onclick: function () { moveCursor(state.cursorMs + 15 * 60000); } }),
+      h('button', { class: 'btn small', text: 'Now', onclick: function () { moveCursor(now); } }),
+      h('label', { class: 'scrub-jump' }, [
+        h('span', { class: 'muted small', text: 'Jump to' }), timeInput
+      ])
+    ]));
+    paintClock();
+
     root.appendChild(chartWrap);
-    var legend = seriesLegend(tData.series, state.cursorMs, unit);
-    root.appendChild(legend);
+    attachHoverReadout(chartWrap, chart, tData.series, unit, t0, t1);
     /* No caption and no legend hint under the chart.
 
        There were two paragraphs here — one explaining what the figure beside
@@ -2292,8 +3035,26 @@
     // than the chart will draw, that has to be said, because otherwise a
     // missing compound looks like an absent one.
     if (tData.total > tData.series.length) {
-      root.appendChild(h('p', { class: 'muted small', text:
-        'Showing the ' + tData.series.length + ' largest of ' + tData.total + ' curves.' }));
+      /* Saying "18 of 34" and stopping there leaves the reader with an
+         unreadable chart and no idea what to do about it. Both things that
+         thin it out are offered right here. */
+      root.appendChild(h('p', { class: 'muted small overflow-note' }, [
+        'Showing the ' + tData.series.length + ' largest of ' + tData.total + ' curves. ',
+        onBoard.length > 1 && !state.timelineFocus
+          ? h('button', {
+              class: 'link-btn', text: 'Focus on one substance',
+              onclick: function () { state.timelineFocus = onBoard[0].id; render(); }
+            })
+          : null,
+        onBoard.length > 1 && !state.timelineFocus && state.showMetabolites ? ' or ' : null,
+        state.showMetabolites
+          ? h('button', {
+              class: 'link-btn', text: 'hide metabolites',
+              onclick: function () { state.showMetabolites = false; render(); }
+            })
+          : null,
+        ' to thin it out.'
+      ]));
     }
 
     if (!state.showMetabolites) {
@@ -2302,12 +3063,6 @@
       ]));
     }
 
-    root.appendChild(h('div', { class: 'scrub-bar' }, [
-      h('button', { class: 'btn small', text: '⟵ 15m', onclick: function () { moveCursor(state.cursorMs - 15 * 60000); } }),
-      slider,
-      h('button', { class: 'btn small', text: '15m ⟶', onclick: function () { moveCursor(state.cursorMs + 15 * 60000); } }),
-      h('button', { class: 'btn small', text: 'Now', onclick: function () { moveCursor(now); } })
-    ]));
     root.appendChild(detail);
 
     /* ---- what the timeline looks like at the cursor ---- */
@@ -2371,6 +3126,11 @@
           at: g.curves.reduce(function (a, c) {
             return Math.min(a, firstSystemicH(c));
           }, Infinity),
+          // What the card is actually reporting: the amount circulating at
+          // the cursor's moment. Summed across doses when they are combined,
+          // so a grouped card ranks on the whole group rather than on one of
+          // its doses.
+          mg: g.remainingMg,
           el: substanceCard(g, tH, state.showMetabolites ? mergedBreakdown(g.curves) : [])
         });
       });
@@ -2380,14 +3140,23 @@
           var mets = mergedBreakdown(g.curves);
           mets.forEach(function (m) {
             if (!m.active || !metabolitePresent(m, tH)) return;
-            cards.push({ at: m.firstPresentAbsH, el: metaboliteCard(g, m, mets, tH) });
+            cards.push({ at: m.firstPresentAbsH, mg: m.amountAt(tH), el: metaboliteCard(g, m, mets, tH) });
           });
         });
       }
 
-      // Chronological: whichever compound became systemically present first
-      // leads, whether it was swallowed or made in the liver.
-      cards.sort(function (a, b) { return a.at - b.at; });
+      /* Ordered by how much is present, largest first, with the chronological
+         order as the tiebreaker so equal amounts still read in the sequence
+         they happened.
+
+         The honest caveat, since nothing on screen says it: milligrams are
+         not comparable across compounds. Eight grams of ethanol outranks a
+         hundred micrograms of a lysergamide by five orders of magnitude and
+         means far less. This ranks by quantity because quantity is what the
+         cards report; it is not a ranking by importance, and the tier and
+         concentration band on each card remain the things that say how much
+         a given amount matters. */
+      cards.sort(function (a, b) { return b.mg - a.mg || a.at - b.at; });
 
       detail.appendChild(h('div', { class: 'scrub-head' }, [
         h('h3', { text: Charts.fmtDayClock(t) }),
@@ -2544,12 +3313,50 @@
     root.appendChild(h('div', { class: 'log-form' }, fields));
 
     if (!drug) {
-      root.appendChild(h('div', { class: 'empty' }, [
-        h('p', { text: 'Pick a substance to see where a repeated dose settles.' }),
+      var pick = function (id) {
+        return function () {
+          scheduleState.drugId = id;
+          scheduleState.route = null;
+          scheduleState.doseMg = null;
+          render();
+        };
+      };
+
+      var chipRow = function (label, ids, note) {
+        var found = ids.map(function (id) { return DB.get(id); }).filter(Boolean);
+        if (!found.length) return null;
+        return h('div', { class: 'start-row' }, [
+          h('span', { class: 'start-label', text: label }),
+          h('div', { class: 'chips start-chips' }, found.map(function (d) {
+            return h('button', { class: 'chip clickable', title: note, onclick: pick(d.id) }, [d.name]);
+          }))
+        ]);
+      };
+
+      // Anything logged in the last month, most recent first — the substance
+      // someone is actually taking is the one they want this page for.
+      var seen = {}, mine = [];
+      Store.load().slice().reverse().forEach(function (l) {
+        if (seen[l.drugId]) return;
+        var d = DB.get(l.drugId);
+        if (!d || d.formedInVivo || !Object.keys(d.routes).length) return;
+        seen[l.drugId] = 1;
+        mine.push(l.drugId);
+      });
+
+      root.appendChild(h('div', { class: 'empty empty-lead' }, [
+        h('h3', { class: 'empty-title', text: 'What does a repeated dose settle at?' }),
         h('p', { class: 'muted', text:
-          'Anything whose dosing interval is shorter than its half-life accumulates, and the ' +
-          'compounds where that matters most are the ones with long-lived active metabolites — ' +
-          'diazepam, methadone, gidazepam.' })
+          'Anything taken again before it has cleared accumulates. Where it settles depends on the ' +
+          'half-life and the interval, and the compounds where that matters most are the ones with ' +
+          'long-lived active metabolites.' }),
+        h('div', { class: 'start-rows' }, [
+          mine.length ? chipRow('From your log', mine.slice(0, 6),
+            'A substance you have logged') : null,
+          chipRow('Classic accumulators',
+            ['diazepam', 'methadone', 'gidazepam', 'clonazepam', 'fluoxetine'],
+            'A long half-life, or a metabolite with one')
+        ])
       ]));
       return;
     }
@@ -2651,7 +3458,7 @@
         yFormat: function (v) { return Potency.fmtMg(v); },
         // A tick per dose, capped so a four-times-a-day schedule over a month
         // does not draw six hundred of them.
-        markers: curves.slice(0, 60).map(function (cc) { return { tMs: cc.tStartH * HOUR, color: '#888' }; })
+        markers: curves.slice(0, 60).map(function (cc) { return { tMs: cc.tStartH * HOUR, color: Charts.token('--text-faint', '#888') }; })
       })
     ]));
     root.appendChild(seriesLegend(series, null, 'mg'));
@@ -2762,7 +3569,7 @@
    * by severity, sorted worst first, with the detail one click away.
    */
   function renderInteractions(root) {
-    root.appendChild(h('h2', { text: 'Interaction checker' }));
+    root.appendChild(h('h2', {}, ['Interaction checker', helpLink('Interactions')]));
 
     var picked = [];
     var chips = h('div', { class: 'chips' });
@@ -2839,6 +3646,32 @@
     var worst = rows.length ? rows[0].level : 'neutral';
     var counts = {};
     rows.forEach(function (r) { counts[r.level] = (counts[r.level] || 0) + 1; });
+
+    /* Only for the two levels that describe harm. "Caution" and below are
+       ordinary information and do not need a banner over the list — a page
+       that shouts about everything is a page that is not read. */
+    if (worst === 'dangerous' || worst === 'unsafe') {
+      var lead = rows[0];
+      var leadFinding = lead.findings[0];
+      var alsoWorst = rows.filter(function (r) { return r.level === worst; }).length;
+
+      wrap.appendChild(h('div', { class: 'pair-alert level-' + worst }, [
+        h('div', { class: 'pair-alert-head' }, [
+          levelPill(worst),
+          h('strong', { class: 'pair-alert-names',
+            text: lead.a.name + ' + ' + lead.b.name }),
+          alsoWorst > 1 ? h('span', { class: 'muted small',
+            text: 'and ' + (alsoWorst - 1) + ' more at this level' }) : null
+        ]),
+        leadFinding ? h('p', { class: 'pair-alert-mech', text: leadFinding.mechanism }) : null,
+        leadFinding && leadFinding.detail
+          ? h('p', { class: 'pair-alert-detail', text: leadFinding.detail }) : null,
+        h('button', {
+          class: 'btn small', text: 'Full detail for this pair',
+          onclick: function () { showPair(lead); }
+        })
+      ]));
+    }
 
     wrap.appendChild(h('div', { class: 'pair-summary level-' + worst }, [
       h('strong', { text: rows.length + ' pair' + (rows.length === 1 ? '' : 's') + ' checked' }),
@@ -2968,14 +3801,25 @@
     });
 
     root.appendChild(h('div', { class: 'section-head' }, [
-      h('h2', { text: 'Substance database' }),
+      h('h2', {}, ['Substance database', helpLink('Substances')]),
       h('span', { class: 'muted', text: DB.all().length + ' compounds' })
     ]));
+
+    var pinned = UI.pins().map(function (id) { return DB.get(id); }).filter(Boolean);
+    if (pinned.length) {
+      root.appendChild(h('div', { class: 'pin-strip' }, [
+        h('span', { class: 'pin-strip-label', text: 'Pinned' })
+      ].concat(pinned.map(function (d) {
+        return h('button', {
+          class: 'pin-chip', onclick: function () { openDrug(d.id); }
+        }, [h('span', { class: 'pin-star', text: '★' }), d.name]);
+      }))));
+    }
 
     var search = h('input', {
       type: 'search', class: 'wide-input',
       value: state.drugQuery,
-      placeholder: 'Search the whole database by name, alias or class…'
+      placeholder: 'Search the whole database by name, alias or class…  (or press / anywhere)'
     });
     root.appendChild(search);
 
@@ -2990,14 +3834,115 @@
     });
     root.appendChild(pageBar);
 
+    /* ---- how the list is ordered and narrowed ---------------------------
+       Alphabetical is a filing order, not a reading order. Sorting by
+       half-life answers "what here is short-acting", and sorting by
+       confidence puts the compounds with real human data first — which is
+       the honest way to browse a database where two thirds of the figures
+       are extrapolated from analogues.
+
+       The measured-only filter is the same idea as a switch: this app labels
+       every value with its provenance, so it should be able to show you only
+       the ones worth trusting.
+       -------------------------------------------------------------------- */
+    var SORTS = [
+      ['name', 'A–Z'],
+      ['half-life', 'Half-life'],
+      ['confidence', 'Data quality']
+    ];
+
+    var controls = h('div', { class: 'browse-controls' });
+
+    var sortSeg = h('div', { class: 'seg' });
+    SORTS.forEach(function (o) {
+      sortSeg.appendChild(h('button', {
+        class: 'seg-btn' + (state.drugSort === o[0] ? ' active' : ''),
+        text: o[1],
+        onclick: function () {
+          state.drugSort = o[0];
+          Store.setPref('drugSort', o[0]);
+          render();
+        }
+      }));
+    });
+    controls.appendChild(h('span', { class: 'mode-label', text: 'Sort' }));
+    controls.appendChild(sortSeg);
+
+    controls.appendChild(h('button', {
+      class: 'toggle-btn' + (state.drugMeasuredOnly ? ' on' : ''),
+      title: 'Show only compounds whose half-life was measured in humans, ' +
+             'rather than estimated or taken from a structural analogue.',
+      onclick: function () {
+        state.drugMeasuredOnly = !state.drugMeasuredOnly;
+        Store.setPref('drugMeasuredOnly', state.drugMeasuredOnly);
+        render();
+      }
+    }, [h('span', { class: 'toggle-dot' }), 'Measured data only']));
+
+    root.appendChild(controls);
+
     var listWrap = h('div', { class: 'drug-list' });
     root.appendChild(listWrap);
+
+    var CONF_RANK = { measured: 0, estimated: 1, analogue: 2, community: 3, anecdotal: 4, unknown: 5 };
+
+    function measured(d) { return DB.confidenceOf(d) === 'measured'; }
+
+    function narrow(list) {
+      return state.drugMeasuredOnly ? list.filter(measured) : list;
+    }
+
+    /**
+     * Applied to every list on this tab except a search, which keeps its own
+     * relevance order — re-sorting search results alphabetically would bury
+     * the exact match the reader just typed.
+     */
+    function sorted(list) {
+      var out = list.slice();
+      if (state.drugSort === 'half-life') {
+        out.sort(function (a, b) {
+          var ah = a.halfLife.hours, bh = b.halfLife.hours;
+          // Compounds with no recorded half-life sort last rather than first.
+          if (ah == null && bh == null) return a.name.localeCompare(b.name);
+          if (ah == null) return 1;
+          if (bh == null) return -1;
+          return ah - bh || a.name.localeCompare(b.name);
+        });
+      } else if (state.drugSort === 'confidence') {
+        out.sort(function (a, b) {
+          var d = (CONF_RANK[DB.confidenceOf(a)] || 9) - (CONF_RANK[DB.confidenceOf(b)] || 9);
+          return d || a.name.localeCompare(b.name);
+        });
+      } else {
+        out.sort(function (a, b) { return a.name.localeCompare(b.name); });
+      }
+      return out;
+    }
+
+    /** A line explaining what the list is currently showing, and why. */
+    function countLine(shown, total, what) {
+      var text = state.drugMeasuredOnly && shown !== total
+        ? shown + ' of ' + total + ' ' + what + ' have measured human data'
+        : shown + ' ' + what;
+      return h('div', { class: 'browse-count' }, [
+        h('span', { class: 'muted small', text: text }),
+        state.drugMeasuredOnly ? h('button', {
+          class: 'btn tiny', text: 'Show all',
+          onclick: function () {
+            state.drugMeasuredOnly = false;
+            Store.setPref('drugMeasuredOnly', false);
+            render();
+          }
+        }) : null
+      ]);
+    }
 
     function tile(d) {
       return h('button', { class: 'drug-tile', onclick: function () { openDrug(d.id); } }, [
         h('span', { class: 'dt-name' }, [
           d.name,
-          d.inactive ? h('span', { class: 'pill kind-inactive', text: 'inactive' }) : null
+          d.inactive ? h('span', { class: 'pill kind-inactive', text: 'inactive' }) : null,
+          UI.isPinned(d.id) ? h('span', { class: 'dt-pin', text: '★', title: 'Pinned' }) : null
         ]),
         h('span', { class: 'dt-family', text: d.family || '' }),
         h('span', { class: 'dt-meta' }, [
@@ -3012,14 +3957,23 @@
 
       if (q) {
         pageBar.setAttribute('hidden', 'hidden');
-        var hits = DB.search(q, 500);
-        listWrap.appendChild(h('p', { class: 'muted small',
-          text: hits.length + ' match across every class' }));
+        var all = DB.search(q, 500);
+        var hits = narrow(all);
+        listWrap.appendChild(countLine(hits.length, all.length, 'matches across every class'));
         if (!hits.length) {
-          listWrap.appendChild(h('div', { class: 'empty' }, [h('p', { text: 'Nothing matches that.' })]));
+          listWrap.appendChild(h('div', { class: 'empty' }, [
+            h('p', { text: all.length
+              ? 'Nothing matching “' + q + '” has measured human data.'
+              : 'Nothing matches “' + q + '”.' }),
+            h('p', { class: 'muted small', text: all.length
+              ? 'Turn off the measured-data filter to see the ' + all.length + ' estimated ones.'
+              : 'Try an alias, a class (“benzos”, “opioids”) or a partial name.' })
+          ]));
           return;
         }
-        // Grouped by class, in DB.search's relevance order.
+        // Grouped by class, in DB.search's relevance order — a search is
+        // ranked by how well it matched, and re-sorting it would bury the
+        // exact hit the reader just typed under an alphabetical list.
         var byClass = {}, order = [];
         hits.forEach(function (d) {
           if (!byClass[d.class]) { byClass[d.class] = []; order.push(d.class); }
@@ -3035,8 +3989,23 @@
       }
 
       pageBar.removeAttribute('hidden');
-      var items = DB.all().filter(function (d) { return pageForDrug(d) === state.drugPage; })
-        .sort(function (a, b) { return a.name.localeCompare(b.name); });
+      var inPage = DB.all().filter(function (d) { return pageForDrug(d) === state.drugPage; });
+      var items = sorted(narrow(inPage));
+
+      if (!items.length) {
+        listWrap.appendChild(h('div', { class: 'empty' }, [
+          h('p', { text: 'No compound on this page has measured human data.' }),
+          h('button', {
+            class: 'btn small', text: 'Show all ' + inPage.length,
+            onclick: function () {
+              state.drugMeasuredOnly = false;
+              Store.setPref('drugMeasuredOnly', false);
+              render();
+            }
+          })
+        ]));
+        return;
+      }
 
       // "Other" spans several unrelated classes, so it keeps its subheadings.
       if (state.drugPage === 'other') {
@@ -3046,6 +4015,7 @@
           groups[d.class].push(d);
         });
         names.sort();
+        listWrap.appendChild(countLine(items.length, inPage.length, 'compounds'));
         names.forEach(function (cls) {
           listWrap.appendChild(h('h3', { class: 'class-head-plain', text: cls + ' (' + groups[cls].length + ')' }));
           var g = h('div', { class: 'drug-grid' });
@@ -3053,7 +4023,7 @@
           listWrap.appendChild(g);
         });
       } else {
-        listWrap.appendChild(h('p', { class: 'muted small', text: items.length + ' compounds' }));
+        listWrap.appendChild(countLine(items.length, inPage.length, 'compounds'));
         var grid2 = h('div', { class: 'drug-grid' });
         items.forEach(function (d) { grid2.appendChild(tile(d)); });
         listWrap.appendChild(grid2);
@@ -3070,6 +4040,9 @@
   function openDrug(id) {
     state.selectedDrug = id;
     state.tab = 'drugs';
+    // Feeds the palette's opening screen, so getting back to something you
+    // were reading five minutes ago does not mean typing its name again.
+    UI.pushRecent(DB.get(id) ? DB.get(id).id : id);
     render();
     window.scrollTo(0, 0);
   }
@@ -3167,13 +4140,20 @@
       title: d.smiles ? 'Show the 2D structure drawn from the stored SMILES'
                       : 'No structure is recorded for this compound',
       onclick: function () { openStructurePopup(d); }
-    }, ['image']));
+      // 'image' said what the button produced rather than what it shows.
+    }, ['Structure']));
 
     row.appendChild(h('button', {
       class: 'sources-toggle',
       title: 'What this compound is, what it looks like, what people report, and how to be safer with it',
       onclick: function () { openInfoPopup(d); }
-    }, ['info']));
+    }, ['What it is like']));
+
+    row.appendChild(h('button', {
+      class: 'sources-toggle',
+      title: 'Where this compound comes from, and what its route of manufacture leaves in it',
+      onclick: function () { openSynthesisPopup(d); }
+    }, ['Synthesis']));
 
     return { row: row, sourcesList: srcList };
   }
@@ -3343,6 +4323,180 @@
     openModal(body);
   }
 
+  /**
+   * The "synthesis" popup: where the compound came from, and what that left
+   * in it.
+   *
+   * The info popup answers what a compound is. This one answers why the
+   * powder in front of someone is not the compound — why it varies between
+   * batches, why the same measure gives a different dose twice, why a route
+   * that was fine in 2014 produces something with lead in it now. Provenance
+   * is the upstream cause of most of the adulteration and dose-variance
+   * warnings that appear elsewhere on the page, and collecting it in one
+   * place lets those warnings have a reason rather than just a severity.
+   *
+   * What this panel is NOT is a procedure. js/data/synthesis.js sets the rule
+   * the content is written to — route families are named, never performed, on
+   * the grounds that a name is what explains an impurity profile to a reader
+   * and a method is only of use to someone manufacturing. The closing note
+   * says that out loud, because a panel called "Synthesis" that declines to
+   * be a recipe should say why rather than leave the reader hunting for a
+   * section that was never there.
+   */
+  function openSynthesisPopup(d) {
+    var s = d.synthesis || null;
+    var body = h('div', { class: 'info-popup synth-popup' }, [
+      h('h2', { text: d.name + ' — where it comes from' }),
+      h('div', { class: 'drug-sub' }, [
+        h('span', { class: 'tag-chip', text: d.class }),
+        d.family ? h('span', { class: 'tag-chip', text: d.family }) : null,
+        d.schedule ? h('span', { class: 'tag-chip', text: d.schedule }) : null
+      ])
+    ]);
+
+    var block = function (title, text, cls) {
+      if (!text) return null;
+      return h('div', { class: 'info-block ' + (cls || '') }, [
+        h('h4', { text: title }),
+        h('p', { text: text })
+      ]);
+    };
+
+    if (!s) {
+      /* Same discipline as the info popup: absent means nobody has written
+         one, and the honest move is to say so. Assembling a route from the
+         compound's class would be exactly the invention this app cannot
+         afford — "it is a substituted cathinone, so presumably…" is how a
+         database starts asserting chemistry it has no source for. */
+      body.appendChild(h('div', { class: 'note' }, [
+        h('strong', { text: 'No provenance recorded for this compound. ' }),
+        'Absent means nobody has written one here, not that its origin is unknown to ' +
+        'chemistry. Nothing has been assembled from its class, because a route guessed ' +
+        'from a family resemblance would read exactly like a sourced one.'
+      ]));
+
+      var known = h('dl', { class: 'kv wide-kv' });
+      var add = function (k, v) {
+        if (v == null || v === '') return;
+        known.appendChild(h('dt', { text: k }));
+        known.appendChild(h('dd', { text: v }));
+      };
+      add('Class', d.class);
+      add('Family', d.family);
+      add('Legal status', d.schedule);
+      add('CAS', d.cas);
+      add('Formula', d.formula);
+      body.appendChild(h('div', { class: 'info-block' }, [
+        h('h4', { text: 'What the database does hold' }),
+        known
+      ]));
+    } else {
+      body.appendChild(block('Origin', s.origin));
+      body.appendChild(block('Route family', s.route));
+      body.appendChild(block('Precursors and control', s.precursors));
+      // The field the panel exists for, styled to read as the warning it is.
+      body.appendChild(block('What the route leaves behind', s.impurities, 'synth-impurities'));
+      body.appendChild(block('What is actually sold', s.supply));
+    }
+
+    body.appendChild(h('div', { class: 'note' }, [
+      h('strong', { text: 'Named, not detailed. ' }),
+      'This panel names route families, precursors and the residues they leave, because that ' +
+      'is what explains a lab result, an impurity profile or a batch that behaved differently. ' +
+      'It carries no reagent sequences, quantities or conditions, which would tell a reader ' +
+      'nothing they need and a manufacturer everything.'
+    ]));
+
+    body.appendChild(h('p', { class: 'muted small', text:
+      'Provenance explains why a supply varies; it never tells you what is in the thing you ' +
+      'are holding. Only a reagent test, a fentanyl strip or a drug-checking service does that, ' +
+      'and none of them make an unknown substance safe — they only narrow what it might be.' }));
+
+    openModal(body);
+  }
+
+  /**
+   * Pin a compound to the top of the command palette.
+   *
+   * The pin is the only piece of per-substance state the app keeps, and it
+   * exists because a database this size is mostly not about any one reader:
+   * the six or eight compounds that are theirs should be one keystroke away,
+   * and everything else can stay behind a search.
+   */
+  function pinButton(d) {
+    var on = UI.isPinned(d.id);
+    var b = h('button', {
+      class: 'star-btn' + (on ? ' on' : ''),
+      title: on ? 'Pinned — click to remove' : 'Pin to the top of the command palette',
+      'aria-pressed': on ? 'true' : 'false',
+      text: on ? '★' : '☆',
+      onclick: function () {
+        var added = UI.togglePin(d.id);
+        b.className = 'star-btn' + (added ? ' on' : '');
+        b.textContent = added ? '★' : '☆';
+        b.setAttribute('aria-pressed', added ? 'true' : 'false');
+        b.setAttribute('title', added ? 'Pinned — click to remove' : 'Pin to the top of the command palette');
+        UI.toast(added ? 'Pinned ' + d.name : 'Unpinned ' + d.name,
+          { kind: added ? 'ok' : null, icon: added ? '★' : '☆' });
+      }
+    });
+    return b;
+  }
+
+  /** The route a summary should describe: the one people take it by. */
+  function primaryRoute(d) {
+    var keys = Object.keys(d.routes || {});
+    if (!keys.length) return null;
+    // Whichever route has a common dose recorded, preferring the order the
+    // data declares — that order is already "most usual first".
+    var withDose = keys.filter(function (k) { return d.routes[k].doses; });
+    return (withDose[0] || keys[0]);
+  }
+
+  function factCell(label, value, note) {
+    if (value == null) return null;
+    return h('div', { class: 'fact' }, [
+      h('span', { class: 'fact-label', text: label }),
+      h('span', { class: 'fact-value', text: value }),
+      note ? h('span', { class: 'fact-note', text: note }) : null
+    ]);
+  }
+
+  function keyFacts(d) {
+    var rk = primaryRoute(d);
+    var r = rk ? d.routes[rk] : null;
+    var cells = [];
+
+    // --- how much ---
+    if (r && r.doses) {
+      var common = ladderSteps(r.doses).filter(function (x) { return x.tier === 'common'; })[0];
+      if (common) cells.push(factCell('Common dose', common.text, routeLabel(rk)));
+    }
+
+    // --- how long until it starts, and how long it lasts ---
+    if (r) {
+      if (r.onsetMin) {
+        cells.push(factCell('Onset', r.onsetMin[0] + '–' + r.onsetMin[1] + ' min', routeLabel(rk)));
+      }
+      if (r.durationH) {
+        cells.push(factCell('Duration', r.durationH[0] + '–' + r.durationH[1] + ' h', routeLabel(rk)));
+      }
+    }
+
+    // --- how long until it is gone ---
+    if (d.halfLife && d.halfLife.hours != null) {
+      cells.push(factCell('Half-life', Charts.fmtDur(d.halfLife.hours),
+        DB.confidenceOf(d) === 'measured' ? 'measured' : 'estimated'));
+      // Five half-lives is the figure the rest of the app clears a dose at.
+      cells.push(factCell('Effectively clear', Charts.fmtDur(d.halfLife.hours * 5),
+        'about five half-lives'));
+    }
+
+    if (!cells.length) return null;
+
+    return h('section', { class: 'key-facts', 'aria-label': 'Key figures' }, cells);
+  }
+
   function renderDrugDetail(root, id) {
     var d = DB.get(id);
     if (!d) { state.selectedDrug = null; renderDrugs(root); return; }
@@ -3370,13 +4524,24 @@
     // right of the molecular formula — see headerActions().
     var actions = headerActions(d);
     root.appendChild(h('div', { class: 'drug-header' }, [
-      h('h1', { text: d.name }),
+      h('div', { class: 'drug-title-row' }, [
+        h('h1', { text: d.name }),
+        pinButton(d),
+        // Reading about a compound and logging one are the same errand often
+        // enough that making the reader go back to Now, open the modal and
+        // retype the name was the wrong default.
+        (d.formedInVivo || !Object.keys(d.routes).length) ? null : h('button', {
+          class: 'btn small', text: '+ Log a dose',
+          onclick: function () { openLogModal(d.id); }
+        })
+      ]),
       h('div', { class: 'drug-sub' }, [
         h('span', { class: 'tag-chip', text: d.class }),
         d.family ? h('span', { class: 'tag-chip', text: d.family }) : null,
         d.schedule ? h('span', { class: 'tag-chip', text: d.schedule }) : null
       ]),
       d.aliases.length ? h('p', { class: 'muted small', text: 'Also known as: ' + d.aliases.join(', ') }) : null,
+      keyFacts(d),
       h('div', { class: 'identity-row' }, [identityLine(d), actions.row]),
       actions.sourcesList
     ]));
@@ -3549,7 +4714,52 @@
        collapsed section at the bottom is where nobody looks. It is rendered
        beside the compound name instead — see headerActions(). */
 
+    /* ---- a jump bar over the sections --------------------------------
+       A full substance page runs to several screens — isomers, mechanism,
+       dosing, elimination, metabolism, potency, interactions — and half of
+       them are collapsed, so scrolling past a closed section tells you
+       nothing about what is further down. The bar lists what the page holds
+       and jumps to it, opening a collapsed section on the way rather than
+       scrolling to a heading that hides its own contents.
+       ------------------------------------------------------------------ */
+    if (secs.length > 2) root.appendChild(sectionJumpBar(secs));
+
     secs.forEach(function (el) { root.appendChild(el); });
+  }
+
+  /**
+   * Builds the jump bar from the sections themselves, so it cannot list a
+   * section that is not there — the page varies a lot between compounds
+   * (a metabolite has no dosing, most compounds have no isomers).
+   */
+  function sectionJumpBar(secs) {
+    var bar = h('nav', { class: 'jump-bar', 'aria-label': 'Sections on this page' });
+
+    secs.forEach(function (el, i) {
+      var titleEl = el.querySelector('.sec-title');
+      if (!titleEl) return;
+      var title = titleEl.textContent;
+      var id = 'sec-' + i;
+      el.id = id;
+
+      bar.appendChild(h('button', {
+        class: 'jump-link', text: title,
+        onclick: function () {
+          // A collapsed section is opened first: jumping to a heading that
+          // hides what you came for is worse than not jumping at all.
+          var head = el.querySelector('.sec-head');
+          var body = el.querySelector('.sec-body');
+          if (head && body && body.hasAttribute('hidden')) head.click();
+
+          // The application bar is sticky, so an unadjusted scroll puts the
+          // heading underneath it.
+          var top = el.getBoundingClientRect().top + window.pageYOffset - 74;
+          window.scrollTo({ top: top, behavior: 'smooth' });
+        }
+      }));
+    });
+
+    return bar;
   }
 
   /**
@@ -4475,10 +5685,71 @@
       items: [{ kind: 'solvent', solventId: 'water', amount: 100, unit: 'g' }],
       doseMl: 1,
       doseUnit: 'ml',
+      // A dry mixture is the same arithmetic measured by mass instead of
+      // volume: no solvent, portions weighed rather than drawn up.
+      dry: false,
+      doseMassMg: 100,
+      doseMassUnit: 'mg',
       compositionBasis: 'mass'
     };
   }
-  var solutionState = defaultSolutionState();
+  var WORKING_KEY = 'drug-info.solution.working.v1';
+
+  /**
+   * The mixture being worked on, kept across reloads.
+   *
+   * It used to live only in memory, so a refresh — or following a link and
+   * coming back — silently discarded a recipe someone had just weighed out
+   * ingredient by ingredient. "Saved solutions" is a deliberate act of
+   * naming and filing something; not losing your work is not the same thing
+   * and should not have to be asked for.
+   */
+  function loadWorkingSolution() {
+    try {
+      var raw = localStorage.getItem(WORKING_KEY);
+      if (!raw) return defaultSolutionState();
+      var v = JSON.parse(raw);
+      if (!v || !Array.isArray(v.items)) return defaultSolutionState();
+      var base = defaultSolutionState();
+      Object.keys(base).forEach(function (k) { if (v[k] !== undefined) base[k] = v[k]; });
+      return base;
+    } catch (e) { return defaultSolutionState(); }
+  }
+
+  function persistWorkingSolution() {
+    try { localStorage.setItem(WORKING_KEY, JSON.stringify(solutionState)); } catch (e) { /* no storage */ }
+  }
+
+  var solutionState = loadWorkingSolution();
+
+  /** One place builds the options, so no caller can forget the mode. */
+  function solutionOpts() {
+    return {
+      dry: solutionState.dry,
+      doseMl: solutionState.doseMl,
+      doseMassMg: solutionState.doseMassMg
+    };
+  }
+
+  /**
+   * Switch between a solution and a dry mixture.
+   *
+   * The solvent goes when the mixture does. Leaving 100 g of water sitting in
+   * a powder makes the ingredient list read as nonsense, and coming back to a
+   * solution with no solvent at all leaves nothing to dissolve into — so each
+   * mode arrives in a state that makes sense on its own. Actives and fillers
+   * are never touched, because those are the work.
+   */
+  function setSolutionDry(dry) {
+    if (solutionState.dry === dry) return;
+    solutionState.dry = dry;
+    if (dry) {
+      solutionState.items = solutionState.items.filter(function (i) { return i.kind !== 'solvent'; });
+    } else if (!solutionState.items.some(function (i) { return i.kind === 'solvent'; })) {
+      solutionState.items.unshift({ kind: 'solvent', solventId: 'water', amount: 100, unit: 'g' });
+    }
+    render();
+  }
 
   /**
    * Back to an empty bottle of water.
@@ -4491,11 +5762,21 @@
   function resetSolution() {
     var n = solutionState.items.length;
     var hasWork = n > 1 || (n === 1 && solutionState.items[0].kind !== 'solvent');
-    if (hasWork && !confirm('Reset the mixture to the default 100 g of water?\n\n' +
+    if (hasWork && !confirm((solutionState.dry
+          ? 'Clear the dry mixture?\n\n'
+          : 'Reset the mixture to the default 100 g of water?\n\n') +
         n + ' ingredient' + (n === 1 ? '' : 's') + ' will be discarded. Saved solutions are not affected.')) {
       return;
     }
+    var wasDry = solutionState.dry;
     solutionState = defaultSolutionState();
+    try { localStorage.removeItem(WORKING_KEY); } catch (e) { /* no storage */ }
+    // Reset the mixture, not the mode: someone working on a powder who hits
+    // reset wants an empty powder, not to be moved back to liquids.
+    if (wasDry) {
+      solutionState.dry = true;
+      solutionState.items = [];
+    }
     render();
   }
 
@@ -4503,7 +5784,7 @@
   function copyText(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(function () {
-        alert('Report copied to the clipboard.');
+        UI.toast('Report copied to the clipboard.', { kind: 'ok' });
       }, function () { fallback(); });
     } else { fallback(); }
 
@@ -4519,8 +5800,9 @@
       var ok = false;
       try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
       document.body.removeChild(ta);
-      alert(ok ? 'Report copied to the clipboard.'
-               : 'Could not copy automatically — the report is shown so you can copy it manually.');
+      UI.toast(ok ? 'Report copied to the clipboard.'
+                  : 'Could not copy automatically — the report is shown so you can copy it by hand.',
+        { kind: ok ? 'ok' : 'warn', timeout: ok ? 3000 : 6000 });
       if (!ok) openModal(h('div', {}, [h('h2', { text: 'Plain-text report' }), h('pre', { text: text })]));
     }
   }
@@ -4658,7 +5940,11 @@
      */
     function addIngredient() {
       var amt = parseFloat(amountInput.value);
-      if (!(amt > 0)) { alert('Enter an amount.'); return; }
+      if (!(amt > 0)) {
+        UI.toast('Enter an amount.', { kind: 'warn' });
+        amountInput.focus(); amountInput.select();
+        return;
+      }
       var label;
       if (pendingDrug.kind === 'solvent') {
         var sv = Solution.solvent(pendingDrug.id);
@@ -4668,14 +5954,22 @@
         label = (sv ? sv.name : pendingDrug.id) + ' \u2014 ' + amt + ' ' + unitSel.value;
       } else {
         var dd = DB.get(pendingDrug.id || drugInput.value);
-        if (!dd) { alert('Pick an ingredient from the suggestions.'); return; }
+        if (!dd) {
+          UI.toast('Pick an ingredient from the suggestions.', { kind: 'warn' });
+          drugInput.focus(); drugInput.select();
+          return;
+        }
         var unit = unitSel.value, amount = amt;
         // Moles convert to grams on the way in, so everything downstream deals
         // in mass only and the stored recipe stays unambiguous. The original
         // molar figure is kept for display.
         if (MOLAR_TO_MOL[unit] != null) {
           var mm = Solution.molarMass(dd.formula);
-          if (!mm) { alert('No molar mass is known for ' + dd.name + ' — add it by weight instead.'); return; }
+          if (!mm) {
+            UI.toast('No molar mass is known for ' + dd.name + ' — add it by weight instead.',
+              { kind: 'warn', timeout: 6000 });
+            return;
+          }
           amount = mm * amt * MOLAR_TO_MOL[unit];
           unit = 'g';
         }
@@ -4735,7 +6029,7 @@
    * an editor for that one ingredient, which returns here when it is saved.
    */
   function openIngredientsPopup() {
-    var res = Solution.compute(solutionState.items, { doseMl: solutionState.doseMl });
+    var res = Solution.compute(solutionState.items, solutionOpts());
     var body = h('div', { class: 'ingredients-popup' }, [
       h('h2', { text: 'Ingredients in this mixture' }),
       h('p', { class: 'muted small', text: solutionState.items.length
@@ -4829,7 +6123,8 @@
                 ['% of mixture', pctOfMixture(row.totalMg)],
                 ['% of active mass', row.activeMassFraction == null
                   ? '—' : (row.activeMassFraction * 100).toFixed(1) + '%'],
-                ['Concentration', Potency.fmtConc(row.concMgMl)],
+                [res.dry ? 'Per gram of mix' : 'Concentration',
+                 res.dry ? Potency.fmtMg(row.mgPerG) : Potency.fmtConc(row.concMgMl)],
                 ['Per dose', Potency.fmtMg(row.perDoseMg)]
               ]
             : [['Total', '—']];
@@ -4917,7 +6212,11 @@
           class: 'btn primary', text: 'Save change',
           onclick: function () {
             var v = parseFloat(amountIn.value);
-            if (!(v > 0)) { alert('Enter an amount.'); return; }
+            if (!(v > 0)) {
+              UI.toast('Enter an amount.', { kind: 'warn' });
+              amountIn.focus(); amountIn.select();
+              return;
+            }
             solutionState.items[index].amount = v;
             solutionState.items[index].unit = unitIn.value;
             // The stored mass no longer matches whatever molar figure it was
@@ -4997,6 +6296,10 @@
         name: name,
         savedAt: new Date().toISOString(),
         doseMl: solutionState.doseMl,
+        // Without these a dry mixture reloads as a solution with no solvent,
+        // and every per-dose figure in it changes meaning.
+        dry: !!solutionState.dry,
+        doseMassMg: solutionState.doseMassMg,
         items: JSON.parse(JSON.stringify(solutionState.items))
       };
       // Overwrite a recipe of the same name rather than accumulating duplicates.
@@ -5020,7 +6323,10 @@
       h('h2', { text: 'Save mixture' }),
       h('p', { class: 'muted small', text:
         solutionState.items.length + ' ingredient' + (solutionState.items.length === 1 ? '' : 's') +
-        ', ' + solutionState.doseMl + ' ml per dose. Saved in this browser only.' }),
+        ', ' + (solutionState.dry
+          ? Potency.fmtMg(solutionState.doseMassMg) + ' per weighed portion'
+          : solutionState.doseMl + ' ml per dose') +
+        '. Saved in this browser only.' }),
       h('div', { class: 'field' }, [h('label', { text: 'Name' }), input]),
       clash,
       h('div', { class: 'row-actions' }, [
@@ -5054,13 +6360,20 @@
       list.slice().reverse().forEach(function (entry) {
         tb.appendChild(h('tr', {}, [
           h('td', { text: entry.name }),
-          h('td', { text: entry.items.length + ' ingredients · ' + entry.doseMl + ' ml dose' }),
+          h('td', { text: entry.items.length + ' ingredients · ' +
+            (entry.dry
+              ? Potency.fmtMg(entry.doseMassMg || 100) + ' dry portion'
+              : entry.doseMl + ' ml dose') }),
           h('td', { text: new Date(entry.savedAt).toLocaleDateString() }),
           h('td', {}, [h('button', {
             class: 'btn tiny', text: 'Load',
             onclick: function () {
               solutionState.items = JSON.parse(JSON.stringify(entry.items));
               solutionState.doseMl = entry.doseMl;
+              // Recipes saved before dry mixtures existed have no flag, and
+              // a missing flag means what it always meant: a solution.
+              solutionState.dry = !!entry.dry;
+              if (entry.doseMassMg > 0) solutionState.doseMassMg = entry.doseMassMg;
               closeModal(); render();
             }
           })]),
@@ -5094,7 +6407,9 @@
             format: 'drug-info-solutions', version: 1,
             exportedAt: new Date().toISOString(),
             solutions: [{ name: 'Current mixture', savedAt: new Date().toISOString(),
-                          doseMl: solutionState.doseMl, items: solutionState.items }]
+                          doseMl: solutionState.doseMl, dry: !!solutionState.dry,
+                          doseMassMg: solutionState.doseMassMg,
+                          items: solutionState.items }]
           }, null, 2), 'application/json');
         }
       }),
@@ -5123,27 +6438,186 @@
           list.push(entry); added++;
         });
         saveSolutions(list);
-        alert('Imported ' + added + ' solution' + (added === 1 ? '' : 's') + '.');
         openSolutionManager();
+        UI.toast('Imported ' + added + ' solution' + (added === 1 ? '' : 's') + '.',
+          { kind: added ? 'ok' : null });
       } catch (err) {
-        alert('Could not read that file: ' + err.message);
+        UI.toast('Could not read that file: ' + err.message, { kind: 'danger', timeout: 6000 });
       }
     };
     reader.readAsText(file);
   }
 
+  /**
+   * The mixture checks, as one panel.
+   *
+   * These used to render two different ways depending on which branch of the
+   * tab you were in: a single grouped banner once there was an active, and —
+   * before that — one full-width box per check, each with its own identical
+   * "Mixture check" heading. Three stacked boxes all called the same thing is
+   * not three findings, it is one list that forgot it was a list.
+   */
+  function mixtureChecksEl(warnings) {
+    if (!warnings || !warnings.length) return null;
+
+    var RANK = { danger: 3, error: 3, warn: 2, info: 1 };
+    var norm = function (lv) { return lv === 'error' ? 'danger' : lv; };
+
+    var worst = warnings.reduce(function (a, w) {
+      return (RANK[w.level] || 0) > (RANK[a] || 0) ? w.level : a;
+    }, 'info');
+    var bannerClass = norm(worst) === 'danger' ? 'danger' : worst === 'warn' ? 'warn' : 'info';
+
+    var counts = { danger: 0, warn: 0, info: 0 };
+    warnings.forEach(function (w) { counts[norm(w.level)] = (counts[norm(w.level)] || 0) + 1; });
+
+    return h('div', { class: 'mix-banner mix-' + bannerClass }, [
+      h('div', { class: 'mix-banner-head' }, [
+        h('span', { class: 'mix-icon', text: bannerClass === 'info' ? 'i' : '!' }),
+        h('strong', { text: warnings.length === 1 ? 'Mixture check' : 'Mixture checks' }),
+        h('span', { class: 'muted small', text:
+          [counts.danger ? counts.danger + ' serious' : null,
+           counts.warn ? counts.warn + ' warning' + (counts.warn === 1 ? '' : 's') : null,
+           counts.info ? counts.info + ' note' + (counts.info === 1 ? '' : 's') : null]
+          .filter(Boolean).join(' · ') })
+      ]),
+      h('ul', { class: 'mix-list' }, warnings.slice()
+        .sort(function (a, b) { return (RANK[b.level] || 0) - (RANK[a.level] || 0); })
+        .map(function (w) {
+          var lv = norm(w.level);
+          return h('li', { class: 'mix-item mix-item-' + lv }, [
+            h('span', { class: 'mix-tag mix-tag-' + lv, text: lv === 'danger' ? 'serious' : lv }),
+            h('span', { text: w.text })
+          ]);
+        }))
+    ]);
+  }
+
+  /**
+   * The mixture itself, listed where it is being built.
+   *
+   * The contents used to live entirely behind a "View ingredients (1)"
+   * button. The reasoning was sound — the full per-ingredient figures are
+   * eight numbers apiece and stacking them inline turned the tab into a wall
+   * of boxes — but the conclusion went too far: what is in the bottle is the
+   * one thing the page is about, and it was the one thing you could not see.
+   *
+   * So the amounts are here, one line each, and the derived figures stay in
+   * the popup behind "All figures".
+   */
+  /**
+   * The colour each ingredient carries, keyed so that any part of the tab can
+   * ask for it.
+   *
+   * The composition chart derives its colours from position in res.rows and
+   * res.blend.components. Anything else that wants to mark an ingredient —
+   * the list of what is in the bottle, for one — has to derive them the same
+   * way or it is drawing a legend that disagrees with its own chart.
+   */
+  function compositionColors(res) {
+    var drugs = {}, solvents = {};
+    (res.rows || []).forEach(function (r, i) {
+      drugs[r.drugId] = r.inactive ? Charts.token('--text-faint', '#5a5a68') : Charts.colorFor(i);
+    });
+    if (res.blend && res.blend.components) {
+      res.blend.components.forEach(function (c, i) {
+        solvents[c.solvent.id] = Charts.colorFor((res.rows || []).length + i);
+      });
+    }
+    return { drugs: drugs, solvents: solvents };
+  }
+
+  function mixturePanel(res, controls) {
+    var list = h('div', { class: 'mix-rows' });
+    var colors = compositionColors(res);
+
+    solutionState.items.forEach(function (item, i) {
+      var isSolvent = item.kind === 'solvent';
+      var name, sub2, tone = '';
+
+      if (isSolvent) {
+        var sv = Solution.solvent(item.solventId);
+        var comp = res.blend && res.blend.byId ? res.blend.byId[sv.id] : null;
+        name = sv.name;
+        if (sv.neverIngest) tone = ' mix-row-hazard';
+        sub2 = comp
+          ? (Solution.isVolumeUnit(item.unit)
+              ? comp.massG.toFixed(2) + ' g'
+              : comp.volumeMl.toFixed(2) + ' ml')
+          : 'solvent';
+      } else {
+        var dd = DB.get(item.drugId);
+        var row = null;
+        res.rows.forEach(function (r) { if (r.drugId === item.drugId) row = r; });
+        name = dd ? dd.name : item.drugId;
+        if (row && row.inactive) tone = ' mix-row-inactive';
+        sub2 = row && row.perDoseMg != null
+          ? Potency.fmtMg(row.perDoseMg) + ' per dose'
+          : (row && row.inactive ? 'inactive' : 'active');
+      }
+
+      var dot = isSolvent
+        ? colors.solvents[item.solventId]
+        : colors.drugs[item.drugId];
+
+      list.appendChild(h('div', { class: 'mix-row' + tone }, [
+        h('span', { class: 'mix-row-dot', style: 'background:' + (dot || 'var(--border-strong)') }),
+        h('button', {
+          class: 'mix-row-name', title: 'Change the amount, or remove it',
+          onclick: function () { editIngredient(i); }
+        }, [name]),
+        h('span', { class: 'mix-row-amt', text: item.amount + ' ' + item.unit }),
+        h('span', { class: 'mix-row-sub muted small', text: sub2 }),
+        h('button', {
+          class: 'chip-x', title: 'Remove ' + name, 'aria-label': 'Remove ' + name, text: '×',
+          onclick: function () { solutionState.items.splice(i, 1); render(); }
+        })
+      ]));
+    });
+
+    return h('section', { class: 'mixture-panel' }, [
+      h('div', { class: 'mixture-head' }, [
+        h('h3', { text: solutionState.dry ? 'In the jar' : 'In the bottle' }),
+        h('span', { class: 'muted small', text: solutionState.items.length
+          ? solutionState.items.length + ' ingredient' + (solutionState.items.length === 1 ? '' : 's')
+          : 'empty' }),
+        controls
+      ]),
+      solutionState.items.length ? list : null
+    ]);
+  }
+
   function renderSolution(root) {
-    root.appendChild(h('div', { class: 'section-head' }, [
-      h('h2', { text: 'Solution calculator' }),
-      h('div', { class: 'row-actions' }, [
+    var modeSeg = h('div', { class: 'seg' }, [
+      ['Solution', false, 'Dissolve a known mass in a known volume and measure doses by volume. The better technique wherever the compound and the route allow it, because a liquid mixes itself.'],
+      ['Dry mix', true, 'Cut an active into a filler and weigh portions. No solvent, no volume — everything is mass fractions. Use it when nothing safe will dissolve the compound, or when the dose is going into a capsule.']
+    ].map(function (m) {
+      return h('button', {
+        class: 'seg-btn' + (solutionState.dry === m[1] ? ' active' : ''),
+        title: m[2],
+        onclick: function () { setSolutionDry(m[1]); }
+      }, [m[0]]);
+    }));
+
+    /* Seven buttons in a row, all the same size, is a toolbar that makes you
+       read every label to find the one you want — and it put a mode switch,
+       three file operations and a destructive Reset on the same footing. The
+       mode switch belongs to the title (it decides what the tab IS); the rest
+       are file operations and sit together in their own quiet group. */
+    root.appendChild(h('div', { class: 'section-head solution-head' }, [
+      h('div', { class: 'solution-title' }, [
+        h('h2', {}, [
+          solutionState.dry ? 'Dry mix calculator' : 'Solution calculator',
+          helpLink('Solutions')
+        ]),
+        modeSeg
+      ]),
+      h('div', { class: 'row-actions solution-files' }, [
         h('button', { class: 'btn small', text: 'Save', onclick: saveCurrentSolution }),
-        h('button', { class: 'btn small', text: 'Saved solutions', onclick: openSolutionManager }),
-        h('button', { class: 'btn small', text: 'Copy plain text', onclick: function () {
-          copyText(Solution.textReport(Solution.compute(solutionState.items, { doseMl: solutionState.doseMl })));
+        h('button', { class: 'btn small', text: 'Saved', onclick: openSolutionManager }),
+        h('button', { class: 'btn small', text: 'Copy as text', onclick: function () {
+          copyText(Solution.textReport(Solution.compute(solutionState.items, solutionOpts())));
         } }),
-        // Confirmed, because a recipe is real work and the button sits next to
-        // the harmless ones. Saved solutions are untouched — this clears the
-        // working mixture only.
         h('button', { class: 'btn small danger', text: 'Reset', title:
           'Clear the working mixture and go back to the default 100 g of water. Saved solutions are not affected.',
           onclick: resetSolution })
@@ -5191,22 +6665,69 @@
        much of it you measure out. They sit in one bare row at the top of the
        tab rather than in a panel of their own — the entry fields live in a
        popup, so nothing stands between the top of the page and the figures.  */
-    root.appendChild(h('div', { class: 'entry-row' }, [
+    /* ---- dose by mass, when the mixture is a powder ---- */
+    var MASS_TO_MG = { 'µg': 0.001, mg: 1, g: 1000 };
+    var massUnit = MASS_TO_MG[solutionState.doseMassUnit] ? solutionState.doseMassUnit : 'mg';
+    var doseMassInput = h('input', {
+      type: 'number', step: 'any', min: '0.001',
+      value: +(solutionState.doseMassMg / MASS_TO_MG[massUnit]).toFixed(4),
+      onchange: function () {
+        var shown = parseFloat(doseMassInput.value);
+        if (!(shown > 0)) shown = 100;
+        solutionState.doseMassUnit = massUnit;
+        solutionState.doseMassMg = shown * MASS_TO_MG[massUnit];
+        render();
+      }
+    });
+    var doseMassUnitSel = h('select', {
+      onchange: function (e) {
+        // Same rule as the volume unit: changing the unit must not change the
+        // physical amount.
+        var prev = solutionState.doseMassMg;
+        massUnit = e.target.value;
+        solutionState.doseMassUnit = massUnit;
+        doseMassInput.value = +(prev / MASS_TO_MG[massUnit]).toFixed(4);
+        render();
+      }
+    }, ['µg', 'mg', 'g'].map(function (u) {
+      return h('option', { value: u, text: u, selected: u === massUnit ? 'selected' : null });
+    }));
+
+    var mixtureControls = h('div', { class: 'entry-row' }, [
       h('button', { class: 'btn primary', text: '+ Add ingredient', onclick: openAddIngredientPopup }),
-      h('button', { class: 'btn', text: 'View ingredients (' + solutionState.items.length + ')',
-        onclick: openIngredientsPopup }),
-      h('span', { class: 'entry-dose' }, [
-        h('label', { text: 'Dose volume' }),
-        h('div', { class: 'inline' }, [doseInput, doseUnitSel])
-      ])
-    ]));
+      solutionState.items.length
+        ? h('button', { class: 'btn', text: 'All figures', title:
+            'Every derived figure for every ingredient — shares by mass and by volume, ' +
+            'concentration, and what one dose contains of each.',
+            onclick: openIngredientsPopup })
+        : null,
+      /* The tab computes what a dose delivers; the Now tab curves what was
+         taken. Without this the reader had to read a milligram figure off
+         this page and retype it into the log once per active, which is both
+         tedious and exactly the sort of hand transcription this tab exists to
+         remove from dosing. */
+      solutionState.items.some(function (i) { return i.kind !== 'solvent'; })
+        ? h('button', { class: 'btn', text: 'Log this dose', title:
+            'Add this dose to the log, split into what it delivers of each active in it.',
+            onclick: function () { openLogModal(null, 'solution'); } })
+        : null,
+      h('span', { class: 'entry-dose' }, solutionState.dry
+        ? [h('label', { text: 'Dose mass' }), h('div', { class: 'inline' }, [doseMassInput, doseMassUnitSel])]
+        : [h('label', { text: 'Dose volume' }), h('div', { class: 'inline' }, [doseInput, doseUnitSel])])
+    ]);
 
-    root.appendChild(h('p', { class: 'muted small', text:
-      'Dissolve a known mass in a known volume, then measure doses by volume. This is how compounds ' +
-      'active below what a scale can weigh are dosed at all — and arithmetic errors here are a ' +
-      'recurring cause of overdose, which is exactly why the numbers are laid out in full below.' }));
+    root.appendChild(h('p', { class: 'muted small solution-intro', text: solutionState.dry
+      ? 'Cut an active into a filler, then weigh portions of the powder. It solves the same problem ' +
+        'as a solution — a compound active below what a scale can read — and it is the weaker way to ' +
+        'do it, because two powders separate and a liquid cannot. Use it when nothing safe will ' +
+        'dissolve the compound, or when the dose is going into a capsule anyway.'
+      : 'Dissolve a known mass in a known volume, then measure doses by volume. This is how compounds ' +
+        'active below what a scale can weigh are dosed at all — and arithmetic errors here are a ' +
+        'recurring cause of overdose, which is exactly why the numbers are laid out in full below.' }));
 
-    var res = Solution.compute(solutionState.items, { doseMl: solutionState.doseMl });
+    persistWorkingSolution();
+
+    var res = Solution.compute(solutionState.items, solutionOpts());
 
     /* ---- every headline figure, in one row ---------------------------------
        What the mixture is (volume, density, mass, freezing point, pH) and what
@@ -5221,7 +6742,22 @@
        "Solvent blend" repeats the name of an ingredient that is listed twice
        elsewhere — so those three are gone rather than restated here. */
     var statsEl = h('div', { class: 'stat-row' });
-    if (res.noSolvent) {
+    if (res.dry) {
+      statsEl.appendChild(statCard('Total mass', Potency.fmtMg(res.totalMassMg),
+        'everything in the jar — active and filler alike, which is what a scale reads'));
+      statsEl.appendChild(statCard('Dose mass', Potency.fmtMg(res.doseMassMg),
+        'the portion you weigh out; every per-dose figure below follows from it'));
+      if (res.dryChecks && res.dryChecks.dilutionRatio) {
+        statsEl.appendChild(statCard('Dilution',
+          '1 : ' + (res.dryChecks.dilutionRatio - 1).toFixed(1),
+          'one part active to this many parts of everything else, by mass'));
+      }
+      if (res.dryChecks && res.dryChecks.scaleErrorFraction != null) {
+        statsEl.appendChild(statCard('Scale error',
+          '±' + Math.round(res.dryChecks.scaleErrorFraction * 100) + '%',
+          'what ±5 mg — a realistic figure for a milligram scale — does to a dose this size'));
+      }
+    } else if (res.noSolvent) {
       statsEl.appendChild(statCard('Solvent', 'none yet',
         'Add one and the volume, concentration and per-dose amounts all follow from it.'));
     } else {
@@ -5245,13 +6781,18 @@
         'the solvent blend on its own is ' + res.blend.density.toFixed(3) + ' g/ml'));
     }
     if (res.rows.length) {
-      statsEl.appendChild(statCard('Concentration', Potency.fmtConc(res.totalConcMgMl)));
-      statsEl.appendChild(statCard('Doses in solution', Math.floor(res.dosesAvailable * 10) / 10));
+      if (!res.dry) statsEl.appendChild(statCard('Concentration', Potency.fmtConc(res.totalConcMgMl)));
+      statsEl.appendChild(statCard(res.dry ? 'Doses in mixture' : 'Doses in solution',
+        Math.floor(res.dosesAvailable * 10) / 10));
     }
+
+    root.appendChild(mixturePanel(res, mixtureControls));
 
     if (!solutionState.items.length) {
       root.appendChild(h('div', { class: 'empty' }, [
-        h('p', { text: 'Nothing in the mixture yet. "+ Add ingredient" takes actives, solvents and fillers alike — there is no separate step for solvents.' })
+        h('p', { text: solutionState.dry
+          ? 'Nothing in the jar yet. Add the active you are diluting and a filler to carry it — lactose, mannitol or microcrystalline cellulose.'
+          : 'Nothing in the bottle yet. "+ Add ingredient" takes actives, solvents and fillers alike — there is no separate step for solvents.' })
       ]));
       return;
     }
@@ -5271,63 +6812,18 @@
       // so the stats go out before the prompt for an active.
       root.appendChild(statsEl);
       root.appendChild(h('div', { class: 'empty' }, [
-        h('p', { text: 'Now add at least one active to see concentrations and per-dose amounts.' })
+        h('p', { text: solutionState.dry
+          ? 'Now add at least one active to see per-dose amounts.'
+          : 'Now add at least one active to see concentrations and per-dose amounts.' })
       ]));
-      if (res.warnings.length) {
-        var wl0 = h('div', { class: 'findings' });
-        res.warnings.forEach(function (w) {
-          var lv = w.level === 'danger' || w.level === 'error' ? 'dangerous'
-                 : w.level === 'warn' ? 'caution' : 'neutral';
-          wl0.appendChild(h('div', { class: 'finding level-' + lv }, [
-            h('div', { class: 'finding-head' }, [levelPill(lv), h('strong', { text: 'Mixture check' })]),
-            h('p', { class: 'mech', text: w.text })
-          ]));
-        });
-        root.appendChild(wl0);
-      }
+      var checks0 = mixtureChecksEl(res.warnings);
+      if (checks0) root.appendChild(checks0);
       return;
     }
 
-    /* ---- mixture checks as a banner, above everything ---- */
-    if (res.warnings.length) {
-      var worst = res.warnings.reduce(function (a, w) {
-        var rank = { danger: 3, error: 3, warn: 2, info: 1 };
-        return (rank[w.level] || 0) > (rank[a] || 0) ? w.level : a;
-      }, 'info');
-      var bannerClass = (worst === 'danger' || worst === 'error') ? 'danger'
-                      : worst === 'warn' ? 'warn' : 'info';
-      var counts = { danger: 0, warn: 0, info: 0 };
-      res.warnings.forEach(function (w) {
-        counts[(w.level === 'error' ? 'danger' : w.level)] =
-          (counts[(w.level === 'error' ? 'danger' : w.level)] || 0) + 1;
-      });
-
-      var banner = h('div', { class: 'mix-banner mix-' + bannerClass }, [
-        h('div', { class: 'mix-banner-head' }, [
-          h('span', { class: 'mix-icon', text: bannerClass === 'danger' ? '!' : bannerClass === 'warn' ? '!' : 'i' }),
-          h('strong', { text: 'Mixture checks' }),
-          h('span', { class: 'muted small', text:
-            [counts.danger ? counts.danger + ' serious' : null,
-             counts.warn ? counts.warn + ' warning' + (counts.warn === 1 ? '' : 's') : null,
-             counts.info ? counts.info + ' note' + (counts.info === 1 ? '' : 's') : null]
-            .filter(Boolean).join(' · ') })
-        ]),
-        h('ul', { class: 'mix-list' }, res.warnings
-          .slice()
-          .sort(function (a, b) {
-            var rank = { danger: 3, error: 3, warn: 2, info: 1 };
-            return (rank[b.level] || 0) - (rank[a.level] || 0);
-          })
-          .map(function (w) {
-            var lv = (w.level === 'error' ? 'danger' : w.level);
-            return h('li', { class: 'mix-item mix-item-' + lv }, [
-              h('span', { class: 'mix-tag mix-tag-' + lv, text: lv === 'danger' ? 'serious' : lv }),
-              h('span', { text: w.text })
-            ]);
-          }))
-      ]);
-      root.appendChild(banner);
-    }
+    /* ---- mixture checks, above everything ---- */
+    var checks = mixtureChecksEl(res.warnings);
+    if (checks) root.appendChild(checks);
 
     /* ---- headline stats ---- */
     root.appendChild(statsEl);
@@ -5339,7 +6835,10 @@
        and which one is useful depends on whether you are weighing the recipe
        out or measuring doses from it. So it is one section with a switch
        rather than a title that quietly picks one for you. */
-    var byVolume = solutionState.compositionBasis === 'volume';
+    // A powder has no meaningful volume: bulk volume depends on how hard it
+    // was tapped down, which is not something to put a number on. Mass is the
+    // only honest basis, so the toggle does not apply.
+    var byVolume = !res.dry && solutionState.compositionBasis === 'volume';
     var secComp = section('sol-composition', 'Composition');
     secComp.body.appendChild(h('div', { class: 'row-actions comp-basis' }, [
       h('span', { class: 'mode-label', text: 'Show shares' }),
@@ -5361,6 +6860,7 @@
     // Everything that went into the container, solvents included — leaving the
     // solvent out of a chart of the mixture made water look like it weighed
     // nothing and occupied no space.
+    var compColors = compositionColors(res);
     var compItems = res.rows.map(function (r, i) {
       return {
         key: r.drugId,
@@ -5370,7 +6870,7 @@
         volumeMl: r.volumeMl,
         perDoseMg: r.perDoseMg,
         perDoseMl: null,
-        color: r.inactive ? '#5a5a68' : Charts.colorFor(i)
+        color: compColors.drugs[r.drugId]
       };
     });
     if (!res.noSolvent) {
@@ -5383,25 +6883,30 @@
           volumeMl: c.volumeMl,
           perDoseMg: null,
           perDoseMl: res.doseMl * c.fraction,
-          color: Charts.colorFor(res.rows.length + i)
+          color: compColors.solvents[c.solvent.id]
         });
       });
     }
 
     var pie = Charts.pieChart({
       items: compItems,
-      size: 280,
-      centreLabel: byVolume ? res.volumeMl.toFixed(1) + ' ml' : res.totalSystemMassG.toFixed(1) + ' g',
+      // A donut of two slices does not need to be the tallest element on the
+      // tab; it was pushing the per-dose figures — the numbers the page
+      // exists for — a full screen further down.
+      size: 210,
+      centreLabel: byVolume ? res.volumeMl.toFixed(1) + ' ml'
+        : (res.dry ? Potency.fmtMg(res.totalMassMg) : res.totalSystemMassG.toFixed(1) + ' g'),
       centreSub: byVolume ? 'total volume' : 'total mass',
       emptyCaption: 'Hover a slice or a legend row for its share and what a dose delivers of it.',
       valueFormat: function (v, frac, it) {
         // Both numbers the question actually needs: the share of the whole
         // mixture, and what a dose of it delivers.
-        var parts = [Charts.fmtPct(frac) + ' of the solution'];
+        var parts = [Charts.fmtPct(frac) + (res.dry ? ' of the powder' : ' of the solution')];
         parts.push(byVolume
           ? it.volumeMl.toFixed(it.volumeMl < 1 ? 3 : 2) + ' ml of ' + res.volumeMl.toFixed(1) + ' ml'
           : Potency.fmtMg(it.massMg) + ' total');
-        if (it.perDoseMg != null) parts.push(Potency.fmtMg(it.perDoseMg) + ' per ' + res.doseMl + ' ml dose');
+        if (it.perDoseMg != null) parts.push(Potency.fmtMg(it.perDoseMg) + ' per ' +
+          (res.dry ? Potency.fmtMg(res.doseMassMg) + ' portion' : res.doseMl + ' ml dose'));
         else if (it.perDoseMl != null) parts.push(it.perDoseMl.toFixed(3) + ' ml per dose');
         return parts.join('  \u00b7  ');
       }
@@ -5424,15 +6929,21 @@
         height: 240
       })
     ]));
+    var doseLabel = res.dry ? Potency.fmtMg(res.doseMassMg) + ' portion' : res.doseMl + ' ml dose';
     secComp.body.appendChild(h('p', { class: 'muted small', text: byVolume
       ? 'Top: share of the finished volume — the solvents plus the space each dissolved solid occupies, ' +
         'largest first. Solid volumes are estimated from crystal density, which is close for sugars and ' +
-        'overstates it for salts, so treat them as approximate. Bottom: what a ' + res.doseMl +
-        ' ml dose delivers of each ACTIVE, which is the part that determines what the dose does.'
-      : 'Top: share of the total mass of the mixture — every ingredient, including inactive fillers ' +
-        'and the solvent itself, heaviest first. Hover any slice for its percentage and what a dose ' +
-        'delivers of it. Bottom: what a ' + res.doseMl + ' ml dose delivers of each ACTIVE, which is ' +
-        'the part that determines what the dose does.' }));
+        'overstates it for salts, so treat them as approximate. Bottom: what a ' + doseLabel +
+        ' delivers of each ACTIVE, which is the part that determines what the dose does.'
+      : (res.dry
+          ? 'Top: share of the total mass of the powder — every ingredient, filler included, heaviest ' +
+            'first. This is the ratio a weighed portion carries IF the powder is evenly mixed, which ' +
+            'is the assumption the whole method rests on. Bottom: what a ' + doseLabel + ' delivers ' +
+            'of each ACTIVE.'
+          : 'Top: share of the total mass of the mixture — every ingredient, including inactive fillers ' +
+            'and the solvent itself, heaviest first. Hover any slice for its percentage and what a dose ' +
+            'delivers of it. Bottom: what a ' + doseLabel + ' delivers of each ACTIVE, which is ' +
+            'the part that determines what the dose does.') }));
     root.appendChild(secComp.el);
 
     /* ---- what one dose contains: actives AND solvents together ---- */
@@ -5453,7 +6964,8 @@
             ? h('span', { class: 'pill kind-inactive', text: 'inactive' })
             : h('span', { class: 'pill tier-' + r.tier, text: r.tier })
         ]),
-        h('div', { class: 'card-sub', text: Potency.fmtMg(r.perDoseMg) + ' per ' + res.doseMl + ' ml · ' +
+        h('div', { class: 'card-sub', text: Potency.fmtMg(r.perDoseMg) + ' per ' +
+          (res.dry ? Potency.fmtMg(res.doseMassMg) + ' portion' : res.doseMl + ' ml') + ' · ' +
           (r.inactive ? 'filler / excipient' : r.route) })
       ]);
       if (r.inactive) {
@@ -5562,7 +7074,16 @@
     root.appendChild(h('h2', { text: 'Patterns' }));
 
     if (!logs.length) {
-      root.appendChild(h('div', { class: 'empty' }, [h('p', { text: 'No data yet.' })]));
+      root.appendChild(h('div', { class: 'empty empty-lead' }, [
+        h('h3', { class: 'empty-title', text: 'Nothing to find patterns in yet.' }),
+        h('p', { class: 'muted', text:
+          'This page reads the dose log and nothing else: how often, how much, at what times of ' +
+          'day, and roughly where tolerance sits. It needs a few entries before any of that means ' +
+          'anything.' }),
+        h('div', { class: 'empty-actions' }, [
+          h('button', { class: 'btn primary', text: '+ Log a dose', onclick: openLogModal })
+        ])
+      ]));
       return;
     }
 
@@ -5587,6 +7108,48 @@
         return new Date(l.timeMs).toDateString();
       })).size)
     ]));
+
+    /* ---- time of day ----
+       Twenty-four buckets over the whole log. Deliberately not "average per
+       day" or anything smoothed: it is a count of what was logged when, and
+       reading it as anything more than that would be reading too much in. */
+    var hours = [];
+    for (var hI = 0; hI < 24; hI++) hours.push(0);
+    logs.forEach(function (l) { hours[new Date(l.timeMs).getHours()]++; });
+
+    var busiest = hours.indexOf(Math.max.apply(null, hours));
+    var fmtHour = function (hr) {
+      return (hr % 12 === 0 ? 12 : hr % 12) + (hr < 12 ? ' am' : ' pm');
+    };
+
+    root.appendChild(h('div', { class: 'section-head sub' }, [
+      h('h3', { text: 'Time of day' }),
+      h('span', { class: 'muted small', text: logs.length < 8
+        ? 'Too few entries to read much into'
+        : 'Most often around ' + fmtHour(busiest) })
+    ]));
+
+    root.appendChild(h('div', { class: 'chart-wrap' }, [
+      Charts.barChart({
+        items: hours.map(function (n, hr) {
+          return {
+            label: hr % 3 === 0 ? fmtHour(hr) : '',
+            value: n,
+            // The peak hour is the one the caption names, so it is the one
+            // that should be findable in the chart.
+            color: hr === busiest && logs.length >= 8
+              ? 'var(--accent)' : Charts.token('--accent-dim', '#3d6d99')
+          };
+        }),
+        height: 180,
+        valueFormat: function (v) { return String(Math.round(v)); }
+      })
+    ]));
+
+    root.appendChild(h('p', { class: 'muted small', text:
+      'A count of logged doses by the hour they were taken, over the whole log. It says when you ' +
+      'log, which is not quite the same as when you take something — an entry added the morning ' +
+      'after lands in the morning.' }));
 
     root.appendChild(h('h3', { text: 'Frequency by substance' }));
     root.appendChild(h('div', { class: 'chart-wrap' }, [
@@ -5636,9 +7199,14 @@
         h('td', { text: daysSince < 1 ? Charts.fmtDur(daysSince * 24) + ' ago' : Math.round(daysSince) + ' d ago' }),
         h('td', {}, [tol
           ? h('div', {}, [
-              h('div', { class: 'mini-meter' }, [
-                h('div', { class: 'mini-fill', style: 'width:' + Math.round(tol.index * 100) + '%' }),
-                h('span', { text: Math.round(tol.index * 100) + '%' })
+              // The figure sits beside the bar rather than on top of its
+              // own fill, where it was competing with the fill colour for
+              // contrast and being clipped by the fill edge.
+              h('div', { class: 'meter-row' }, [
+                h('div', { class: 'mini-meter' }, [
+                  h('div', { class: 'mini-fill', style: 'width:' + Math.round(tol.index * 100) + '%' })
+                ]),
+                h('span', { class: 'meter-row-val', text: Math.round(tol.index * 100) + '%' })
               ]),
               // Where it came from, when it did not all come from this
               // compound — a cross-tolerance figure with no attribution is
@@ -5690,26 +7258,93 @@
      MODAL
      ====================================================================== */
 
+  /* A modal is a dialog, and a dialog has to behave like one: it takes the
+     focus when it opens, keeps Tab inside itself while it is up, gives the
+     focus back to whatever opened it when it closes, and tells assistive
+     technology that the page behind it is not currently reachable. None of
+     that was true before — Tab walked straight out of the settings panel and
+     into the substance list behind it. */
+
+  // What had the focus when the modal opened, so it can be handed back.
+  var modalReturn = null;
+
+  var FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), ' +
+                  'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
   function openModal(content) {
     closeModal();
+    modalReturn = document.activeElement;
+
+    var panel = h('div', {
+      class: 'modal', role: 'dialog', 'aria-modal': 'true', tabindex: '-1'
+    }, [
+      h('button', {
+        class: 'modal-close', text: '×', title: 'Close  (Esc)', 'aria-label': 'Close',
+        onclick: closeModal
+      }),
+      content
+    ]);
+
     var overlay = h('div', { class: 'modal-overlay', id: 'modal', onclick: function (e) {
       if (e.target.id === 'modal') closeModal();
-    } }, [
-      h('div', { class: 'modal' }, [
-        h('button', { class: 'modal-close', text: '×', onclick: closeModal }),
-        content
-      ])
-    ]);
+    } }, [panel]);
+
+    // The heading the dialog is built around, so it is announced by name.
+    var heading = content.querySelector ? content.querySelector('h2, h3') : null;
+    if (heading) {
+      if (!heading.id) heading.id = 'modal-title';
+      panel.setAttribute('aria-labelledby', heading.id);
+    }
+
+    overlay.addEventListener('keydown', function (e) {
+      if (e.key !== 'Tab') return;
+      var items = Array.prototype.filter.call(panel.querySelectorAll(FOCUSABLE), function (el) {
+        return el.offsetParent !== null || el === document.activeElement;
+      });
+      if (!items.length) return;
+      var first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+
     document.body.appendChild(overlay);
+    // The page behind cannot scroll out from under the dialog.
+    document.body.classList.add('modal-open');
+
+    // Callers that want a particular field focused do it after this returns;
+    // the panel itself is the fallback so the focus is never left outside.
+    panel.focus();
   }
+
   function closeModal() {
     var m = $('#modal');
-    if (m) m.remove();
+    if (!m) return;
+    m.remove();
+    document.body.classList.remove('modal-open');
+    if (modalReturn && document.contains(modalReturn)) modalReturn.focus();
+    modalReturn = null;
   }
 
   /* ======================================================================
      FAQ
      ====================================================================== */
+
+  /**
+   * A quiet "?" that opens the FAQ filtered to one group.
+   *
+   * It sets the FAQ's search box rather than inventing a second filtering
+   * mechanism, so the reader lands somewhere they can widen or clear.
+   */
+  function helpLink(group) {
+    return h('button', {
+      class: 'help-link', title: 'Questions about ' + group.toLowerCase(),
+      'aria-label': 'Help: ' + group,
+      onclick: function () {
+        state.faqQuery = group;
+        goTab('faq');
+      }
+    }, ['?']);
+  }
 
   function renderFaq(root) {
     var all = window.FAQ || [];
@@ -5725,8 +7360,67 @@
     });
     root.appendChild(search);
 
+    // Arriving from a tab's "?" lands on that tab's questions, with a way
+    // back to all fifty that does not require guessing what to delete.
+    if (state.faqQuery) {
+      root.appendChild(h('div', { class: 'faq-filter-note' }, [
+        h('span', { class: 'muted small', text: 'Filtered to “' + state.faqQuery + '”' }),
+        h('button', {
+          class: 'btn tiny', text: 'Show all questions',
+          onclick: function () { state.faqQuery = ''; render(); }
+        })
+      ]));
+    }
+
+    /* Fifty questions in eight groups is a page you scroll past rather than
+       read. The strip names the groups and jumps to them; the toggle opens
+       everything at once for the reader who would rather use the browser's
+       own find-in-page than this search box. */
+    var jump = h('nav', { class: 'jump-bar faq-jump', 'aria-label': 'Question groups' });
+    root.appendChild(jump);
+
     var listWrap = h('div', { class: 'faq-list' });
     root.appendChild(listWrap);
+
+    var allOpen = false;
+
+    function setAllOpen(open) {
+      allOpen = open;
+      Array.prototype.forEach.call(listWrap.querySelectorAll('.faq-item'), function (item) {
+        var b = item.querySelector('.faq-answer');
+        var q = item.querySelector('.faq-q');
+        if (open) b.removeAttribute('hidden'); else b.setAttribute('hidden', 'hidden');
+        q.setAttribute('aria-expanded', open ? 'true' : 'false');
+        q.querySelector('.faq-caret').textContent = open ? '▾' : '▸';
+      });
+      paintJump();
+    }
+
+    function paintJump() {
+      jump.innerHTML = '';
+      var seen = {};
+      Array.prototype.forEach.call(listWrap.querySelectorAll('.faq-group'), function (head) {
+        var name = head.textContent;
+        if (seen[name]) return;
+        seen[name] = 1;
+        jump.appendChild(h('button', {
+          class: 'jump-link', text: name,
+          onclick: function () {
+            window.scrollTo({
+              top: head.getBoundingClientRect().top + window.pageYOffset - 74,
+              behavior: 'smooth'
+            });
+          }
+        }));
+      });
+      if (!jump.childNodes.length) { jump.setAttribute('hidden', 'hidden'); return; }
+      jump.removeAttribute('hidden');
+      jump.appendChild(h('button', {
+        class: 'jump-link jump-link-action',
+        text: allOpen ? 'Collapse all' : 'Expand all',
+        onclick: function () { setAllOpen(!allOpen); }
+      }));
+    }
 
     function paint() {
       listWrap.innerHTML = '';
@@ -5742,6 +7436,7 @@
         listWrap.appendChild(h('div', { class: 'empty small' }, [
           h('p', { text: 'Nothing matches that. Try a single word — "metabolite", "combined", "pH".' })
         ]));
+        paintJump();
         return;
       }
 
@@ -5783,6 +7478,11 @@
           listWrap.appendChild(h('div', { class: 'faq-item' }, [btn, body]));
         });
       });
+
+      // A search opens its matches, so the toggle has to agree with what is
+      // on screen rather than with what it last did.
+      allOpen = terms.length > 0;
+      paintJump();
     }
 
     search.addEventListener('input', function (e) {
@@ -6001,6 +7701,35 @@
       onclick: function () { Profile.reset(); openSettings(); render(); }
     }));
 
+    /* ---- appearance ----------------------------------------------------
+       The header carries a one-click theme toggle, which is right for
+       switching but wrong for finding: a reader looking for a light mode
+       looks in settings. Both write the same preference. */
+    body.appendChild(h('h3', { text: 'Appearance' }));
+    body.appendChild(h('p', { class: 'muted small', text:
+      'Charts, structure drawings and warning colours all follow this. ' +
+      'Matching the system means the app changes when the system does.' }));
+
+    var themeSeg = h('div', { class: 'seg' });
+    UI.THEMES.forEach(function (m) {
+      themeSeg.appendChild(h('button', {
+        class: 'seg-btn' + (UI.themeMode() === m ? ' active' : ''),
+        text: UI.THEME_LABEL[m],
+        onclick: function () { UI.setTheme(m); openSettings(); }
+      }));
+    });
+    body.appendChild(themeSeg);
+    if (UI.themeMode() === 'system') {
+      body.appendChild(h('p', { class: 'muted small settings-theme-note',
+        text: 'Currently showing the ' + UI.resolvedTheme() + ' palette.' }));
+    }
+
+    body.appendChild(h('h3', { text: 'Keyboard' }));
+    body.appendChild(h('p', { class: 'muted small' }, [
+      'Press ', h('kbd', { text: '?' }), ' anywhere for the full list, or ',
+      h('kbd', { text: 'Ctrl' }), ' ', h('kbd', { text: 'K' }), ' to search every compound and command.'
+    ]));
+
     openModal(body);
   }
 
@@ -6012,39 +7741,185 @@
   // it is a moment's task, not a place — and the timeline lives inside Now,
   // because "what is on board" and "what is on board over time" are one
   // question that was being split across two screens.
+  /* [state key, label, icon]. The icon only shows on the phone layout, where
+     the bar sits at the bottom and six text labels will not fit across
+     375 px without truncating every one of them. */
   var TABS = [
-    ['now', 'Now'],
-    ['interactions', 'Interactions'],
-    ['solution', 'Solution'], ['drugs', 'Substances'], ['stats', 'Patterns'],
-    ['faq', 'FAQ']
+    ['now', 'Now', 'now'],
+    ['interactions', 'Interactions', 'interactions'],
+    ['solution', 'Solution', 'solution'],
+    ['drugs', 'Substances', 'substances'],
+    ['stats', 'Patterns', 'patterns'],
+    ['faq', 'FAQ', 'faq']
   ];
+
+  /* ======================================================================
+     ROUTING
+     ----------------------------------------------------------------------
+     The app was a single URL. That meant no bookmarking a compound, no
+     sending someone a link to one, no browser Back, and a refresh that
+     landed you wherever the app felt like starting. All four are things a
+     reader reasonably expects from something served over HTTP.
+
+     The hash is written from the state rather than the state being driven
+     from the hash: render() is the only thing that knows what is on screen,
+     so it is the only thing that writes the address. A hashchange that the
+     app did not cause — Back, Forward, a pasted link — reads the other way.
+     ====================================================================== */
+
+  var ROUTE_TAB = {
+    now: 'now', interactions: 'interactions', solution: 'solution',
+    substances: 'drugs', patterns: 'stats', faq: 'faq'
+  };
+  var TAB_ROUTE = { now: 'now', interactions: 'interactions', solution: 'solution',
+                    drugs: 'substances', stats: 'patterns', faq: 'faq' };
+
+  /** The address that describes what is on screen right now. */
+  function routeFromState() {
+    if (state.tab === 'drugs') {
+      if (state.selectedDrug) return '/substance/' + state.selectedDrug;
+      return '/substances/' + state.drugPage;
+    }
+    if (state.tab === 'now') return '/now/' + state.nowPage;
+    return '/' + (TAB_ROUTE[state.tab] || 'now');
+  }
+
+  /**
+   * Read an address into the state. Returns false for anything unrecognised,
+   * so a stale or hand-edited link falls back to the default view rather
+   * than to a blank screen.
+   */
+  function applyRoute(hash) {
+    var parts = String(hash || '').replace(/^#/, '').split('/').filter(Boolean);
+    if (!parts.length) return false;
+
+    if (parts[0] === 'substance') {
+      var d = DB.get(decodeURIComponent(parts[1] || ''));
+      if (!d) return false;
+      state.tab = 'drugs';
+      state.selectedDrug = d.id;
+      return true;
+    }
+
+    var tab = ROUTE_TAB[parts[0]];
+    if (!tab) return false;
+    state.tab = tab;
+    state.selectedDrug = null;
+
+    if (tab === 'now' && parts[1] && NOW_PAGES.some(function (x) { return x.key === parts[1]; })) {
+      state.nowPage = parts[1];
+    }
+    if (tab === 'drugs' && parts[1] && DRUG_PAGES.some(function (x) { return x.key === parts[1]; })) {
+      state.drugPage = parts[1];
+    }
+    return true;
+  }
+
+  // Set while the app is writing the address itself, so the hashchange that
+  // results is not read back in as a navigation the reader asked for.
+  var writingRoute = false;
+
+  function syncRoute() {
+    var want = routeFromState();
+    if (location.hash.replace(/^#/, '') === want) return;
+    writingRoute = true;
+    // A new entry, so Back returns to the previous screen. render() runs on
+    // data changes too, but those leave the address alone and so add nothing.
+    location.hash = want;
+    // The event is asynchronous; the flag has to outlive this call stack.
+    setTimeout(function () { writingRoute = false; }, 0);
+  }
+
+  var TAB_TITLE = {
+    now: 'Now', interactions: 'Interactions', solution: 'Solution calculator',
+    drugs: 'Substances', stats: 'Patterns', faq: 'FAQ'
+  };
+
+  /**
+   * Bookmarks, history entries and the browser's tab strip all show the
+   * document title, and "drug-info — dose log, pharmacokinetics &
+   * interactions" for all of them tells the reader nothing about which page
+   * they saved. The compound or the section goes first, where a truncated
+   * tab still shows it.
+   */
+  function syncTitle() {
+    var lead;
+    if (state.tab === 'drugs' && state.selectedDrug) {
+      var d = DB.get(state.selectedDrug);
+      lead = d ? d.name : 'Substances';
+    } else if (state.tab === 'now') {
+      var pg = NOW_PAGES.filter(function (x) { return x.key === state.nowPage; })[0];
+      lead = pg ? pg.label : 'Now';
+    } else {
+      lead = TAB_TITLE[state.tab] || 'drug-info';
+    }
+    document.title = lead + ' — drug-info';
+  }
+
+  function initRouter() {
+    window.addEventListener('hashchange', function () {
+      if (writingRoute) { writingRoute = false; return; }
+      if (applyRoute(location.hash)) {
+        // Someone arriving at a compound from the address bar wants the top
+        // of it, the same as clicking through to it would give them.
+        render();
+        window.scrollTo(0, 0);
+      }
+    });
+  }
+
+  /**
+   * Move to a tab, and optionally to a page within it.
+   *
+   * Every route into a tab goes through here — the nav buttons, the number
+   * keys and the command palette — so that the incidental state a tab carries
+   * (which substance is open, what is being compared against what) is cleared
+   * in exactly one place rather than three.
+   */
+  function goTab(tab, page) {
+    state.tab = tab;
+    if (tab !== 'drugs') state.selectedDrug = null;
+    state.compareRef = null;
+    if (page) state.nowPage = page;
+    render();
+    window.scrollTo(0, 0);
+  }
 
   function render() {
     var nav = $('#nav');
     nav.innerHTML = '';
-    TABS.forEach(function (t) {
+    TABS.forEach(function (t, i) {
       nav.appendChild(h('button', {
         class: 'tab' + (state.tab === t[0] ? ' active' : ''),
-        onclick: function () {
-          state.tab = t[0];
-          if (t[0] !== 'drugs') state.selectedDrug = null;
-          state.compareRef = null;
-          render();
-        }
-      }, [t[1]]));
+        title: t[1] + '  (' + (i + 1) + ')',
+        'aria-current': state.tab === t[0] ? 'page' : null,
+        onclick: function () { goTab(t[0]); }
+      }, [
+        UI.icon(t[2], 21),
+        h('span', { class: 'tab-label', text: t[1] })
+      ]));
     });
 
-    // Settings sits apart from the tabs — it is a modal, not a view, and it
-    // changes what every other tab shows.
-    var prof = Profile.get();
-    nav.appendChild(h('button', {
-      class: 'tab tab-settings' + (prof.applyToEstimates ? '' : ' muted-tab'),
-      title: prof.applyToEstimates
-        ? 'Profile: ' + prof.weightLb + ' lb, ' + Profile.formatHeight(prof.heightIn) + ', ' +
-          cypSummary(prof).full + '. Estimates are adjusted for this.'
-        : 'Profile adjustments are currently switched off — you are seeing raw population figures.',
-      onclick: openSettings
-    }, ['⚙ ' + prof.weightLb + ' lb · ' + cypSummary(prof).chip]));
+    // Settings sits apart from the tabs — it is a modal rather than a view,
+    // and it changes what every tab shows. It is rendered into the appbar
+    // beside the theme and keyboard controls, which are the same kind of
+    // thing: global, and not a place you navigate to.
+    var slot = $('#profile-slot');
+    if (slot) {
+      var prof = Profile.get();
+      slot.innerHTML = '';
+      slot.appendChild(h('button', {
+        class: 'profile-chip' + (prof.applyToEstimates ? '' : ' off'),
+        title: prof.applyToEstimates
+          ? 'Profile: ' + prof.weightLb + ' lb, ' + Profile.formatHeight(prof.heightIn) + ', ' +
+            cypSummary(prof).full + '. Estimates are adjusted for this. (,)'
+          : 'Profile adjustments are switched off — these are raw population figures. (,)',
+        onclick: openSettings
+      }, [
+        h('span', { class: 'pc-icon', text: '⚙' }),
+        h('span', { class: 'pc-text', text: prof.weightLb + ' lb · ' + cypSummary(prof).chip })
+      ]));
+    }
 
     var main = $('#main');
     main.innerHTML = '';
@@ -6060,17 +7935,184 @@
     // A saved tab from before Log and Timeline were folded into Now would
     // otherwise land on an undefined renderer.
     (views[state.tab] || renderNow)(view);
+
+    syncRoute();
+    syncTitle();
+  }
+
+  /* ---------- the first visit ---------------------------------------------
+     An empty app explains nothing. Every screen that makes this worth using
+     — the timeline, the metabolite chain, the concentration readout, the
+     interaction list — needs something logged before it draws anything at
+     all, and asking a first-time visitor to type in what drugs they have
+     taken before showing them what the thing does is the wrong way round.
+
+     So a browser that has never been here gets two doses of one substance,
+     far enough apart to show a redose stacking on an unfinished tail, and
+     lands on the timeline with the window and the combined view already set
+     to frame them. It is a worked example, and it is labelled as one:
+     nobody should mistake it for their own log, and clearing it is one
+     click. Clearing it does not bring it back — see Store.isFirstVisit.
+     ---------------------------------------------------------------------- */
+
+  function seedExample() {
+    var now = Date.now();
+    var note = 'Example dose, added automatically on your first visit — not something you logged.';
+    Store.save([
+      { id: 'demo-1', drugId: 'methamphetamine', amount: 20, unit: 'mg', amountMg: 20,
+        route: 'oral', timeMs: now - 24 * HOUR, demo: true, notes: note },
+      { id: 'demo-2', drugId: 'methamphetamine', amount: 10, unit: 'mg', amountMg: 10,
+        route: 'oral', timeMs: now - 1 * HOUR, demo: true, notes: note }
+    ]);
+  }
+
+  function hasExample() {
+    return Store.load().some(function (l) { return l.demo; });
+  }
+
+  function clearExample() {
+    // Only the example. Anything logged since is somebody's own data.
+    Store.save(Store.load().filter(function (l) { return !l.demo; }));
+    render();
+  }
+
+  /** Says plainly that the visible data is not the reader's. */
+  function exampleBanner() {
+    return h('div', { class: 'note note-example' }, [
+      h('div', {}, [
+        h('strong', { text: 'This is an example, not your log. ' }),
+        'Two doses of methamphetamine — 20 mg a day ago and 10 mg an hour ago — were added ' +
+        'automatically so there is something to look at. Every figure on the screen is ' +
+        'modelled from them. Clear it and the app is empty until you log something yourself.'
+      ]),
+      h('button', { class: 'btn small', text: 'Clear the example', onclick: clearExample })
+    ]);
+  }
+
+  function openShortcuts() { openModal(UI.shortcutSheet()); }
+
+  /* ---------- what the command palette can do -----------------------------
+     Registered rather than hard-coded into the palette, so that the palette
+     never needs to know this file exists. The order here is the order they
+     appear on the palette's opening screen.
+     ---------------------------------------------------------------------- */
+
+  function registerCommands() {
+    UI.registerActions([
+      { id: 'now', group: 'nav', icon: '◉', title: 'Now — what is on board', key: '1',
+        keywords: 'board active current concentration', run: function () { goTab('now', 'board'); } },
+      { id: 'timeline', group: 'nav', icon: '⌇', title: 'Timeline',
+        keywords: 'curve chart plot scrub graph', run: function () { goTab('now', 'timeline'); } },
+      { id: 'steady', group: 'nav', icon: '≡', title: 'Steady state',
+        keywords: 'schedule accumulation repeat dosing', run: function () { goTab('now', 'schedule'); } },
+      { id: 'history', group: 'nav', icon: '☰', title: 'Dose history',
+        keywords: 'log entries past export', run: function () { goTab('now', 'history'); } },
+      { id: 'interactions', group: 'nav', icon: '⚡', title: 'Interactions', key: '2',
+        keywords: 'combination danger pair mix', run: function () { goTab('interactions'); } },
+      { id: 'solution', group: 'nav', icon: '⚗', title: 'Solution calculator', key: '3',
+        keywords: 'volumetric dilution solvent mix concentration', run: function () { goTab('solution'); } },
+      { id: 'drugs', group: 'nav', icon: '◇', title: 'Substance database', key: '4',
+        keywords: 'compounds list browse', run: function () { goTab('drugs'); } },
+      { id: 'stats', group: 'nav', icon: '▤', title: 'Patterns', key: '5',
+        keywords: 'stats statistics summary usage', run: function () { goTab('stats'); } },
+      { id: 'faq', group: 'nav', icon: '?', title: 'FAQ', key: '6',
+        keywords: 'help questions explain', run: function () { goTab('faq'); } },
+
+      { id: 'log', icon: '+', title: 'Log a dose', key: 'N',
+        keywords: 'add new entry record took', run: openLogModal },
+      { id: 'settings', icon: '⚙', title: 'Profile and settings', key: ',',
+        keywords: 'weight height cyp metaboliser genotype', run: openSettings },
+      { id: 'theme', icon: '◐', title: 'Switch theme', key: 'T',
+        keywords: 'dark light appearance colour color night',
+        run: function () { UI.cycleTheme(); } },
+      { id: 'shortcuts', icon: '⌨', title: 'Keyboard shortcuts', key: '?',
+        keywords: 'keys help bindings', run: openShortcuts },
+      { id: 'export-json', icon: '↓', title: 'Export the log as JSON',
+        keywords: 'download backup save file',
+        run: function () { download('drug-log.json', Store.exportJSON(), 'application/json'); } },
+      { id: 'export-csv', icon: '↓', title: 'Export the log as CSV',
+        keywords: 'download spreadsheet excel save file',
+        run: function () { download('drug-log.csv', Store.exportCSV(), 'text/csv'); } }
+    ]);
+  }
+
+  /* ---------- keystrokes that depend on where you are ---------------------
+     Handed to UI.bindKeys, which owns the "is the reader typing into
+     something" question. Each returns true when it consumed the key, so an
+     unhandled number key still does whatever the browser would have done.
+     ---------------------------------------------------------------------- */
+
+  function keyHandlers() {
+    return {
+      shortcuts: openShortcuts,
+      settings: openSettings,
+      log: openLogModal,
+      tab: function (i) {
+        if (!TABS[i]) return false;
+        goTab(TABS[i][0]);
+        return true;
+      },
+      // P pins whatever substance page is open, and does nothing elsewhere.
+      pin: function () {
+        if (state.tab !== 'drugs' || !state.selectedDrug) return false;
+        var d = DB.get(state.selectedDrug);
+        if (!d) return false;
+        var added = UI.togglePin(d.id);
+        render();
+        UI.toast(added ? 'Pinned ' + d.name : 'Unpinned ' + d.name,
+          { kind: added ? 'ok' : null, icon: added ? '★' : '☆' });
+        return true;
+      }
+    };
   }
 
   function init() {
+    if (Store.isFirstVisit()) { Store.markSeen(); seedExample(); }
+
+    /* The framing belongs to the example rather than to the single first
+       render: while it is still there, open on the view that shows what it is
+       for — the timeline, two days wide, doses combined so the redose reads as
+       one shape rather than two. Tying this to the first render alone meant a
+       refresh landed on an empty-looking board page while the banner was still
+       saying an example had been set up to look at.
+
+       They are ordinary settings, not preferences written on someone's behalf:
+       changing any of them works normally, and clearing the example takes the
+       defaults back to the usual ones. */
+    if (hasExample()) {
+      state.nowPage = 'timeline';
+      state.windowH = 48;
+      state.timelineMode = 'combined';
+    }
     var q = DB.qualityReport();
     $('#db-stats').textContent =
       q.total + ' compounds · ' + q.buckets.measured + ' with measured PK · ' +
       (q.buckets.estimated + q.buckets.analogue + q.buckets.unknown) + ' estimated';
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
+    /* Escape closes the topmost thing. A modal first; failing that, a
+       substance page returns to the list — the one place in this app where
+       "back" has an unambiguous meaning. The palette handles its own Escape
+       ahead of this, in the capture phase. */
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      if ($('#modal')) { closeModal(); return; }
+      if (state.tab === 'drugs' && state.selectedDrug) { state.selectedDrug = null; render(); }
+    });
+
+    registerCommands();
+    UI.initShell(keyHandlers());
+    initRouter();
+
+    /* An address in the bar wins over both the saved defaults and the
+       example's framing: someone who followed a link to a compound asked for
+       that compound, not for whatever this browser was last looking at. */
+    applyRoute(location.hash);
+
     render();
     setInterval(function () { if (state.tab === 'now') render(); }, 60000);
   }
 
-  global.App = { init: init, render: render, openDrug: openDrug };
+  global.App = {
+    init: init, render: render, openDrug: openDrug, goTab: goTab,
+    openLog: openLogModal, openSettings: openSettings, openShortcuts: openShortcuts
+  };
 })(window);

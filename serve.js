@@ -22,7 +22,12 @@ http.createServer((req, res) => {
   if (!file.startsWith(ROOT)) { res.writeHead(403).end('Forbidden'); return; }
   fs.readFile(file, (err, buf) => {
     if (err) { res.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found'); return; }
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream' });
+    res.writeHead(200, {
+      'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream',
+      // Nothing here is versioned, so a cached script is a stale script and
+      // an edit looks like it did not happen.
+      'Cache-Control': 'no-store'
+    });
     res.end(buf);
   });
 }).listen(PORT, () => console.log(`drug-info running at http://localhost:${PORT}`));

@@ -23,12 +23,43 @@
     return s;
   }
 
-  var PALETTE = [
+  /* The categorical series palette lives in CSS (--series-1 … --series-10) so
+     that switching the theme reshades the charts along with everything else:
+     the dark palette is bright on near-black, the light one darkened enough to
+     stay legible on white. It is read once and cached, because a chart draws
+     hundreds of segments and getComputedStyle is not free; resetPalette()
+     drops the cache when the theme changes. */
+  var FALLBACK = [
     '#5b9dd9', '#e8834a', '#61c0a0', '#c98bdb', '#e3c75a',
     '#7f8de8', '#d76a8a', '#8bbf5a', '#4fb3bf', '#d9a441'
   ];
+  var paletteCache = null;
+  var tokenCache = {};
 
-  function colorFor(i) { return PALETTE[i % PALETTE.length]; }
+  function palette() {
+    if (paletteCache) return paletteCache;
+    var cs = getComputedStyle(document.documentElement);
+    var out = [];
+    for (var i = 1; i <= 10; i++) {
+      var v = (cs.getPropertyValue('--series-' + i) || '').trim();
+      out.push(v || FALLBACK[i - 1]);
+    }
+    paletteCache = out;
+    return out;
+  }
+
+  /** A token's current value, for the few shapes drawn with an inline fill. */
+  function token(name, fallback) {
+    if (tokenCache[name]) return tokenCache[name];
+    var v = (getComputedStyle(document.documentElement).getPropertyValue(name) || '').trim();
+    tokenCache[name] = v || fallback;
+    return tokenCache[name];
+  }
+
+  /** Called by the theme switch; the next draw re-reads the custom properties. */
+  function resetPalette() { paletteCache = null; tokenCache = {}; }
+
+  function colorFor(i) { var pal = palette(); return pal[i % pal.length]; }
 
   /* ---------- scales ------------------------------------------------------ */
 
@@ -154,9 +185,9 @@
       var px = x(m.tMs);
       g.appendChild(el('line', {
         x1: px, x2: px, y1: M.t, y2: M.t + ih,
-        stroke: m.color || '#888', 'stroke-width': 1, 'stroke-dasharray': '2 3', opacity: 0.7
+        stroke: m.color || token('--text-faint', '#888'), 'stroke-width': 1, 'stroke-dasharray': '2 3', opacity: 0.7
       }));
-      g.appendChild(el('circle', { cx: px, cy: M.t + ih, r: 3.5, fill: m.color || '#888' }));
+      g.appendChild(el('circle', { cx: px, cy: M.t + ih, r: 3.5, fill: m.color || token('--text-faint', '#888') }));
     });
 
     // --- "now" line ---
@@ -420,13 +451,13 @@
 
       s.appendChild(el('rect', {
         x: bx0, y: cy - 7, width: Math.max(2, bw), height: 14, rx: 3,
-        fill: it.highlight ? 'var(--accent)' : (it.value >= 1 ? '#5b9dd9' : '#6b6b7a'),
+        fill: it.highlight ? 'var(--accent)' : (it.value >= 1 ? token('--accent', '#5b9dd9') : token('--text-faint', '#6b6b7a')),
         opacity: it.confidence === 'measured' ? 0.9 : 0.5
       }));
       if (it.confidence !== 'measured') {
         s.appendChild(el('rect', {
           x: bx0, y: cy - 7, width: Math.max(2, bw), height: 14, rx: 3,
-          fill: 'none', stroke: it.highlight ? 'var(--accent)' : '#8a8a99',
+          fill: 'none', stroke: it.highlight ? 'var(--accent)' : token('--text-mute', '#8a8a99'),
           'stroke-width': 1, 'stroke-dasharray': '3 2'
         }));
       }
@@ -893,7 +924,7 @@
       x += w;
     });
     s.appendChild(el('rect', {
-      x: M.l, y: top, width: iw, height: barH, fill: 'none', stroke: '#2a2e39', 'stroke-width': 1, rx: 3
+      x: M.l, y: top, width: iw, height: barH, fill: 'none', stroke: token('--border', '#2a2e39'), 'stroke-width': 1, rx: 3
     }));
 
     // legend grid beneath
@@ -915,16 +946,51 @@
      ====================================================================== */
 
   /** opts: { items: [{label, value, color}], valueFormat, height } */
+  /**
+   * A categorical bar chart.
+   *
+   * Two things it used to get wrong, both visible with a short log: bars were
+   * a slice of the full width apiece, so two substances produced two 400 px
+   * slabs; and labels were always rotated and always anchored at the bar
+   * centre, which walked the leftmost one off the left-hand edge of the
+   * drawing where it was clipped.
+   *
+   * Now the bars have a maximum width and the group is centred, and the
+   * labels are only rotated when they will not fit level under their own bar
+   * — with the bottom margin sized from the longest one rather than fixed.
+   */
   function barChart(opts) {
     var items = opts.items;
-    var W = 900, H = opts.height || 260;
-    var M = { t: 16, r: 16, b: 54, l: 46 };
-    var iw = W - M.l - M.r, ih = H - M.t - M.b;
+    var n = Math.max(1, items.length);
+    var W = 900;
+
+    // Roughly the width of the label at the 10.5 px the axis uses. It only
+    // has to be close enough to choose between level and angled.
+    var CH = 5.9;
+    var labels = items.map(function (it) { return truncate(it.label, 22); });
+    var widest = labels.reduce(function (a, l) { return Math.max(a, l.length * CH); }, 0);
+
+    var M = { t: 16, r: 16, b: 34, l: 46 };
+    var iw = W - M.l - M.r;
+    var slot = Math.min(iw / n, 130);
+
+    /* Whether labels fit level depends on the gap between the ones that are
+       actually drawn, not on the bar pitch: a 24-bar chart that labels every
+       third bar has three times the room per label it looks like it has. */
+    var labelled = labels.filter(function (l) { return l; }).length || 1;
+    var labelSlot = slot * (n / labelled);
+    var level = widest <= labelSlot - 8;
+
+    if (!level) {
+      // sin(35°) ≈ 0.57 of the label length drops below the axis.
+      M.b = Math.min(120, 34 + widest * 0.57);
+    }
+    var H = opts.height || (level ? 240 : 260);
+    var ih = H - M.t - M.b;
     var s = svgRoot(W, H, 'bar-chart');
 
     var max = Math.max.apply(null, items.map(function (i) { return i.value; }).concat([1]));
     var y = linScale(0, max * 1.1, M.t + ih, M.t);
-    var bw = iw / Math.max(1, items.length);
 
     niceTicks(0, max * 1.1, 4).forEach(function (v) {
       var py = y(v);
@@ -933,18 +999,33 @@
         opts.valueFormat ? opts.valueFormat(v) : String(Math.round(v * 10) / 10)));
     });
 
+    // A handful of bars sit in the middle of the plot rather than being
+    // stretched across it.
+    var groupLeft = M.l + (iw - slot * n) / 2;
+    var bw = Math.min(72, slot * 0.64);
+
     items.forEach(function (it, i) {
-      var x0 = M.l + i * bw + bw * 0.18;
-      var w = bw * 0.64;
+      var cx = groupLeft + i * slot + slot / 2;
+      var x0 = cx - bw / 2;
       var h = Math.max(0, (M.t + ih) - y(it.value));
       s.appendChild(el('rect', {
-        x: x0, y: y(it.value), width: w, height: h, rx: 3,
+        x: x0, y: y(it.value), width: bw, height: h, rx: 3,
         fill: it.color || 'var(--accent)', opacity: 0.85
       }));
+      // The value on top of its own bar: reading a count off a gridline is
+      // work the chart can do instead.
+      if (it.value > 0) {
+        s.appendChild(el('text', {
+          x: cx, y: y(it.value) - 6, class: 'value-label', 'text-anchor': 'middle'
+        }, opts.valueFormat ? opts.valueFormat(it.value) : String(Math.round(it.value * 10) / 10)));
+      }
+
+      var ly = M.t + ih + (level ? 17 : 14);
       var lab = el('text', {
-        x: x0 + w / 2, y: M.t + ih + 16, class: 'axis-label', 'text-anchor': 'end',
-        transform: 'rotate(-35 ' + (x0 + w / 2) + ' ' + (M.t + ih + 16) + ')'
-      }, truncate(it.label, 18));
+        x: cx, y: ly, class: 'axis-label',
+        'text-anchor': level ? 'middle' : 'end'
+      }, labels[i]);
+      if (!level) lab.setAttribute('transform', 'rotate(-35 ' + cx + ' ' + ly + ')');
       s.appendChild(lab);
     });
 
@@ -953,9 +1034,11 @@
   }
 
   global.Charts = {
+    resetPalette: resetPalette,
+    token: token,
     pieChart: pieChart,
     fmtPct: fmtPct,
-    el: el, svgRoot: svgRoot, colorFor: colorFor, PALETTE: PALETTE,
+    el: el, svgRoot: svgRoot, colorFor: colorFor, palette: palette,
     lineChart: lineChart, potencyChart: potencyChart,
     pathwayDiagram: pathwayDiagram, pathwayDepthBeyondFirst: pathwayDepthBeyondFirst,
     barChart: barChart, stackedBar: stackedBar,

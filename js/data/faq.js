@@ -10,6 +10,13 @@
    ========================================================================== */
 window.FAQ = [
 
+{ group: 'The Now tab', q: 'Why is there methamphetamine in my log? I did not put it there.',
+  a: 'Because this is your first visit and the app added an example so there would be something to look ' +
+     'at. It is two doses of one substance — 20 mg a day ago and 10 mg an hour ago — chosen because a ' +
+     'redose stacking on an unfinished tail demonstrates most of what the model does in one screen. ' +
+     'Nothing about it is yours and nothing was sent anywhere. The notice at the top of the Now tab has a ' +
+     'button that clears it, and once cleared it does not come back.' },
+
 { group: 'The Now tab', q: 'What does the Now tab show?',
   a: 'Everything the model believes is in you at this moment, and how that changes over time. It has three pages. ' +
      'CURRENTLY ON BOARD is a card per substance with its effect level, how much is left, and when it clears. ' +
@@ -46,12 +53,19 @@ window.FAQ = [
      'compared between curves. MG is milligram-equivalents in the body on one shared axis, so a curve twice as ' +
      'high really is twice as much material. The legend reports the real milligrams whichever you pick.' },
 
-{ group: 'The Now tab', q: 'Why do some compounds vanish from the legend under the chart?',
-  a: 'The legend lists only what is actually present at the cursor. A row with nothing to report used to sit ' +
-     'there reading a dash, which spent a line saying a compound was absent, and on a log with a few doses in ' +
-     'it most of the legend was that. What is left is ordered largest first and re-orders as you scrub. The ' +
-     'curve is still drawn — it is flat on the axis, which is the same statement made where there is room ' +
-     'for it.' },
+{ group: 'The Now tab', q: 'How do I see what each curve is worth at a given moment?',
+  a: 'Hover the chart and hold still for about half a second. A readout appears at the pointer and follows ' +
+     'it, listing every compound present at the moment under the pointer, largest first, in whatever the Y ' +
+     'axis is showing. It reports where you are POINTING, not where the scrub cursor is parked — so you can ' +
+     'read the chart without disturbing the cards below, which answer for the cursor. Anything not present ' +
+     'is left out rather than listed as a dash. On a touchscreen it is suppressed, because a tooltip under a ' +
+     'finger is hidden by the finger; tap to move the cursor instead.' },
+
+{ group: 'The Now tab', q: 'How do I jump to a specific time on the timeline?',
+  a: 'Type it into the "Jump to" field above the chart. The slider, the arrows and the Now button are all up ' +
+     'there too, along with the cursor time itself in large figures with how far it is from now beside it. A ' +
+     'time outside the visible window clamps to the edge of it — widen the window with the dropdown to reach ' +
+     'further back or further forward.' },
 
 { group: 'The Now tab', q: 'What is on a card when I scrub the timeline?',
   a: 'When it was taken and how much, the half-life being used, two meters, a plasma concentration, and what ' +
@@ -241,6 +255,28 @@ window.FAQ = [
 { group: 'Solutions', q: 'How do I add or edit ingredients in a solution?',
   a: 'Use the Add ingredient button. To change something already in the mixture, open View ingredients and click ' +
      'its name; that opens an editor for its amount and units, with a link through to its substance page.' },
+
+{ group: 'Solutions', q: 'Can I do this without a solvent, as a dry mix?',
+  a: 'Yes — the Solution / Dry mix switch at the top of the tab. A dry mix drops the solvent entirely and ' +
+     'works in mass fractions: cut an active into a filler, then weigh portions of the powder. 100 mg of ' +
+     'alprazolam in 10 g of lactose makes a weighed 100 mg portion carry 990 µg. It solves the same problem ' +
+     'as a solution — a compound active below what a scale can read — and it is what you need when nothing ' +
+     'safe will dissolve the compound, or when the dose is going into a capsule anyway.' },
+
+{ group: 'Solutions', q: 'Is a dry mix as good as a solution?',
+  a: 'No, and the tab says so every time you use it. A liquid mixes itself and cannot separate. Two powders ' +
+     'separate by particle size and density every time the jar is moved, so a scoop from a poorly mixed batch ' +
+     'can carry several times what the arithmetic says — and the more dilute the mixture, the worse a clump ' +
+     'of undiluted active is. No figure calculated from the masses can detect that, which is why the warning ' +
+     'is always shown rather than triggered by a threshold. Dissolve and measure by volume wherever the ' +
+     'compound and the route allow it.' },
+
+{ group: 'Solutions', q: 'How small a portion can I actually weigh?',
+  a: 'Bigger than you think. A "0.001 g" jeweller\'s scale displays a milligram and is honest to about five ' +
+     'in real use once drift, air currents, an off-centre pan and linearity error are counted — so a 20 mg ' +
+     'portion is a ±25% operation and a 100 mg one is ±5%. The Dry mix mode shows that as a Scale error ' +
+     'figure and tells you what it costs in milligrams of the actual active. If the number is uncomfortable, ' +
+     'add more filler so the weighed portion is larger; that is the entire point of diluting.' },
 
 { group: 'Solutions', q: 'How do I add solvents?',
   a: 'Exactly like any other ingredient: type its name — water, ethanol, DMSO, propylene glycol, glycerine — and ' +

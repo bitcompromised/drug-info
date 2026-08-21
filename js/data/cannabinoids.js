@@ -84,7 +84,16 @@ DB.register([
     oral: { onsetMin: [45, 120], peakMin: [120, 240], durationH: [4, 8], afterEffectsH: [2, 8], bioavailability: 0.06,
       doses: { threshold: 5, light: [10, 25], common: [25, 100], strong: [100, 300], heavy: 300, unit: 'mg' } },
     sublingual: { onsetMin: [15, 45], peakMin: [60, 120], durationH: [4, 8], afterEffectsH: [2, 8], bioavailability: 0.15,
-      doses: { threshold: 5, light: [10, 25], common: [25, 100], strong: [100, 250], heavy: 250, unit: 'mg' } }
+      doses: { threshold: 5, light: [10, 25], common: [25, 100], strong: [100, 250], heavy: 250, unit: 'mg' } },
+    /* Oral CBD is the outlier in this file: ~6% bioavailability against ~35%
+       inhaled, so the two ladders differ by more than any other cannabinoid's
+       do. Someone moving from a 50 mg oil to a vape and keeping the number is
+       taking several times the dose they think they are — which matters not
+       because CBD is dangerous but because the CYP inhibition is the point of
+       the entry and it tracks what reaches the blood, not what is on a label. */
+    vaporised: { onsetMin: [0.5, 5], peakMin: [3, 10], durationH: [2, 5], afterEffectsH: [1, 6], bioavailability: 0.35,
+      doses: { threshold: 1, light: [2, 5], common: [5, 20], strong: [20, 50], heavy: 50, unit: 'mg',
+        note: 'About a sixth of the oral figure delivers the same exposure. 5-10 mg vaped is roughly a 30-60 mg capsule, and the CYP inhibition scales with it.' } }
   },
   warnings: [
     'CBD is a broad and potent CYP inhibitor — this is its most important safety property and it is widely ignored because it is sold as a wellness supplement. It substantially raises levels of clobazam, warfarin, some antiepileptics, and many other drugs.',
@@ -114,11 +123,19 @@ DB.register([
   routes: {
     smoked: { onsetMin: [0.5, 5], peakMin: [5, 20], durationH: [0.5, 2], afterEffectsH: [1, 6], bioavailability: 0.4,
       doses: { threshold: 0.05, light: [0.1, 0.5], common: [0.5, 1.5], strong: [1.5, 3], heavy: 3, unit: 'mg',
-        note: 'Active in fractions of a milligram. Sprayed onto plant material with notoriously uneven distribution — one part of a batch may be inert and another lethal.' } }
+        note: 'Active in fractions of a milligram. Sprayed onto plant material with notoriously uneven distribution — one part of a batch may be inert and another lethal.' } },
+    /* E-liquid, which is how this class increasingly moves — it is odourless
+       in a vape, which is the point in prisons and workplaces. The ladder is
+       carried over from smoking unchanged, because both routes deliver to the
+       same lung and no separate vaporised pharmacokinetics exist. */
+    vaporised: { onsetMin: [0.5, 5], peakMin: [5, 20], durationH: [0.5, 2], afterEffectsH: [1, 6], bioavailability: 0.4,
+      doses: { threshold: 0.05, light: [0.1, 0.5], common: [0.5, 1.5], strong: [1.5, 3], heavy: 3, unit: 'mg',
+        note: 'A liquid mixes more evenly than a sprayed herb, so the hot-spot problem is smaller — and is replaced by a worse one: an e-liquid of unstated concentration gives no cue at all about how much a puff delivers, and there is nothing to look at or weigh.' } }
   },
   warnings: [
     'This class has caused mass-casualty poisoning events, seizures, kidney failure, strokes and deaths in ways plant cannabis does not. Full CB1 agonism removes the safety ceiling.',
     'Uneven spraying onto herbal material means dose per gram is unpredictable even within a single bag.',
+    'Sold as e-liquid it is odourless and looks like a nicotine vape, which is why it circulates in prisons and schools — and why people take it without knowing they have.',
     'Not detected by standard cannabis drug tests, which is why it is common in prisons and probation settings.',
     'The specific compounds change constantly as each is banned, so accumulated user experience never applies to the current batch.'
   ],
@@ -305,9 +322,19 @@ DB.register([
   },
   routes: {
     oral: { onsetMin: [45, 120], peakMin: [120, 240], durationH: [4, 8], afterEffectsH: [4, 12], bioavailability: 0.1,
-      doses: { threshold: 2.5, light: [5, 10], common: [10, 30], strong: [30, 60], heavy: 60, unit: 'mg' } }
+      doses: { threshold: 2.5, light: [5, 10], common: [10, 30], strong: [30, 60], heavy: 60, unit: 'mg' } },
+    /* The route most CBN is actually taken by, since the market is carts and
+       not capsules. Inhaled cannabinoids skip the first pass, so roughly
+       three times as much of a vaped milligram arrives as of a swallowed one
+       — the ladder is scaled accordingly rather than copied from oral. */
+    vaporised: { onsetMin: [0.5, 5], peakMin: [5, 20], durationH: [1.5, 4], afterEffectsH: [2, 8], bioavailability: 0.35,
+      doses: { threshold: 1, light: [2, 4], common: [4, 12], strong: [12, 25], heavy: 25, unit: 'mg',
+        note: 'Roughly a third of the oral figure for the same effect, because none of it is lost to the first pass. Onset is minutes rather than the 45-120 of a capsule, so the wait that causes edible overconsumption does not apply here.' } }
   },
-  warnings: ['Marketed heavily as a sleep aid; the controlled evidence for that is weak.'],
+  warnings: [
+    'Marketed heavily as a sleep aid; the controlled evidence for that is weak.',
+    'CBN vape products are frequently CBN distillate that also carries THC, which is intoxicating and is what a "sleep" cart may actually be doing. A certificate of analysis is the only way to know the ratio.'
+  ],
   refs: ['Corroon 2021, Cannabis Cannabinoid Res']
 },
 
@@ -334,7 +361,13 @@ DB.register([
   },
   routes: {
     smoked: { onsetMin: [0.5, 5], peakMin: [5, 20], durationH: [1, 3], afterEffectsH: [1, 6], bioavailability: 0.4,
-      doses: { threshold: 0.5, light: [1, 2], common: [2, 4], strong: [4, 8], heavy: 8, unit: 'mg' } }
+      doses: { threshold: 0.5, light: [1, 2], common: [2, 4], strong: [4, 8], heavy: 8, unit: 'mg' } },
+    /* Same reasoning as MDMB-4en-PINACA: e-liquid is a real format for this
+       class, and the ladder is the smoked one unchanged because both go to
+       the lung and nobody has measured the two separately. */
+    vaporised: { onsetMin: [0.5, 5], peakMin: [5, 20], durationH: [1, 3], afterEffectsH: [1, 6], bioavailability: 0.4,
+      doses: { threshold: 0.5, light: [1, 2], common: [2, 4], strong: [4, 8], heavy: 8, unit: 'mg',
+        note: 'Carried over from the smoked route — no separate vaporised pharmacokinetics have been measured for this compound.' } }
   },
   warnings: [
     'Causes seizures, severe tachycardia, psychosis, kidney injury and deaths that plant cannabis does not. Active metabolites prolong the effect.',
@@ -504,7 +537,15 @@ DB.register([
   },
   routes: {
     oral: { onsetMin: [45, 120], peakMin: [120, 240], durationH: [4, 8], afterEffectsH: [2, 6], bioavailability: 0.06,
-      doses: { threshold: 5, light: [10, 25], common: [25, 75], strong: [75, 150], heavy: 150, unit: 'mg' } }
+      doses: { threshold: 5, light: [10, 25], common: [25, 75], strong: [75, 150], heavy: 150, unit: 'mg' } },
+    /* CBT reaches people almost entirely in vape carts, so leaving the route
+       out meant the one way it is actually taken could not be logged. The
+       numbers are placeholders on the same terms as the rest of this entry —
+       scaled from the oral placeholder by the cannabinoid-typical first-pass
+       ratio, which is an assumption resting on an assumption. */
+    vaporised: { onsetMin: [0.5, 5], peakMin: [5, 15], durationH: [2, 4], afterEffectsH: [1, 5], bioavailability: 0.35,
+      doses: { threshold: 1, light: [2, 4], common: [4, 13], strong: [13, 25], heavy: 25, unit: 'mg',
+        note: 'A placeholder, like every other figure in this entry. No pharmacokinetic study of this compound by any route exists, and it is not reliably one compound.' } }
   },
   warnings: [
     'The name "CBT" is applied inconsistently to several different molecules. A product sold under it is not a defined substance.',
@@ -536,7 +577,13 @@ DB.register([
   },
   routes: {
     oral: { onsetMin: [45, 120], peakMin: [120, 240], durationH: [6, 10], afterEffectsH: [2, 8], bioavailability: 0.06,
-      doses: { threshold: 10, light: [25, 50], common: [50, 200], strong: [200, 400], heavy: 400, unit: 'mg' } }
+      doses: { threshold: 10, light: [25, 50], common: [50, 200], strong: [200, 400], heavy: 400, unit: 'mg' } },
+    /* Same first-pass arithmetic as CBD, which CBDV is the propyl analogue
+       of: ~6% swallowed against ~35% inhaled, so the ladder is scaled by that
+       ratio rather than carried across. */
+    vaporised: { onsetMin: [0.5, 5], peakMin: [5, 15], durationH: [2, 5], afterEffectsH: [1, 6], bioavailability: 0.35,
+      doses: { threshold: 2, light: [5, 10], common: [10, 35], strong: [35, 70], heavy: 70, unit: 'mg',
+        note: 'The clinical trial data behind this compound is all oral dosing at far higher figures. Vaping delivers the same exposure from roughly a sixth of the amount.' } }
   },
   warnings: ['Non-intoxicating, but shares CBD\'s CYP inhibition and can raise levels of co-administered drugs, including antiepileptics.'],
   sources: ['GW Pharmaceuticals CBDV trial data', 'Hill et al. 2013, Br J Pharmacol']
@@ -608,7 +655,14 @@ DB.register([
         note: 'Raw and unheated. If it has been heated at all, dose it as THC instead — roughly 0.88 mg THC per 1 mg THCA.' } },
     smoked: { onsetMin: [0.5, 5], peakMin: [10, 30], durationH: [1.5, 4], afterEffectsH: [2, 8], bioavailability: 0.3,
       doses: { threshold: 1, light: [3, 6], common: [6, 17], strong: [17, 34], heavy: 34, unit: 'mg',
-        note: 'Smoking decarboxylates it — treat these as THC-equivalent doses.' } }
+        note: 'Smoking decarboxylates it — treat these as THC-equivalent doses.' } },
+    /* The route the entire "THCA flower" and "THCA diamond" market runs on,
+       and the one where the trap in this entry closes. A vaporiser holds the
+       material well above the ~105 °C decarboxylation point for longer than a
+       flame does, so conversion is if anything more complete than smoking. */
+    vaporised: { onsetMin: [0.5, 5], peakMin: [10, 25], durationH: [1.5, 4], afterEffectsH: [2, 8], bioavailability: 0.4,
+      doses: { threshold: 1, light: [2, 5], common: [5, 13], strong: [13, 26], heavy: 26, unit: 'mg',
+        note: 'A vaporiser decarboxylates it at least as thoroughly as a flame. What is inhaled is THC — dose it as THC, not as the non-intoxicating acid on the label.' } }
   },
   warnings: [
     'The central trap: THCA is sold as non-intoxicating hemp, but heating it produces ordinary THC. "THCA flower" smoked is simply cannabis.',
@@ -644,7 +698,14 @@ DB.register([
   },
   routes: {
     oral: { onsetMin: [30, 90], peakMin: [60, 180], durationH: [4, 8], afterEffectsH: [2, 6], bioavailability: 0.1,
-      doses: { threshold: 1, light: [2, 10], common: [10, 50], strong: [50, 150], heavy: 150, unit: 'mg' } }
+      doses: { threshold: 1, light: [2, 10], common: [10, 50], strong: [50, 150], heavy: 150, unit: 'mg' } },
+    /* Included because raw-cannabinoid vapes are sold, not because it is a
+       sensible way to take CBDA: heating is precisely what destroys the thing
+       that makes CBDA interesting. The potent 5-HT1A activity belongs to the
+       acid, and the acid does not survive the coil. */
+    vaporised: { onsetMin: [0.5, 5], peakMin: [3, 12], durationH: [2, 5], afterEffectsH: [1, 6], bioavailability: 0.35,
+      doses: { threshold: 0.5, light: [1, 3], common: [3, 15], strong: [15, 40], heavy: 40, unit: 'mg',
+        note: 'Vaporising decarboxylates it to CBD, so this is a CBD dose taken from a CBDA label. If the 5-HT1A antiemetic effect is the reason for taking it, heating defeats the purpose — that activity is the acid\'s, not CBD\'s.' } }
   },
   warnings: ['Non-intoxicating, but converts to CBD on heating and shares CBD\'s CYP inhibition.'],
   sources: ['Rock & Parker 2013, Br J Pharmacol', 'Pellesi et al. 2021, Eur J Clin Pharmacol']

@@ -38,11 +38,169 @@ over that list, so it can answer questions a list cannot:
 - **What the arithmetic really is** when you dissolve something and dose by volume.
 
 Six tabs — **Now**, **Interactions**, **Solution**, **Substances**, **Patterns** and
-**FAQ** — plus a profile panel in the header. Logging is a modal opened from Now, and the
-timeline lives inside Now, because "what is on board" and "what is on board over time"
-are one question that used to be split across two screens.
+**FAQ**. Logging is a modal opened from Now or from any substance page, and the timeline
+lives inside Now, because "what is on board" and "what is on board over time" are one
+question that used to be split across two screens.
+
+Around them sits the shell: a command palette on <kbd>Ctrl</kbd>+<kbd>K</kbd> that
+searches every compound, page and command from one field, a light and dark theme that the
+charts and structure drawings follow, and the profile control — the two figures that
+actually change the numbers on screen — in the application bar. See
+[The shell](#the-shell).
 
 ---
+
+## The first visit
+
+A browser that has never loaded the app arrives to an example already in place: two doses of
+methamphetamine, 20 mg a day ago and 10 mg an hour ago, opening on the timeline two days
+wide with the doses combined.
+
+The reason is that an empty app explains nothing. Every screen worth showing — the timeline,
+the metabolite chain, the concentration readout, the interaction list — needs something
+logged before it draws anything, so a first-time visitor met three blank tabs and a prompt to
+type in what drugs they had taken. That is the wrong way round: it asks for trust before
+showing anything worth trusting. Two doses of one substance, far enough apart to show a
+redose stacking on an unfinished tail, demonstrate most of the model in one screen.
+
+It is labelled as an example, in a notice above everything with its own clear button, because
+nobody should mistake it for their own log. Clearing it leaves the app empty and **does not
+bring it back** — the first-visit test is the absence of all three storage keys, not an empty
+log, so emptying the log deliberately is not read as never having been here. Somebody who has
+used the app before never sees it. The timeline framing is tied to the example still being
+present rather than to the first render, so a refresh does not land on an empty-looking page
+while the notice is still describing what was set up to look at.
+
+## The shell
+
+Everything that is not a tab. These exist because a 649-compound database behind a tab
+and a search box is a lot of clicking, and because a page read at 3 a.m. and a page read
+at a desk are not the same page.
+
+### The command palette
+
+<kbd>Ctrl</kbd>+<kbd>K</kbd> (or <kbd>/</kbd>) from anywhere. One field searching three
+things at once, because someone who wants "fentanyl" and someone who wants "export my
+log" both start by typing:
+
+- **Compounds** — the same ranked search the Substances tab uses, showing class, family
+  and half-life on each row.
+- **Pages** — every tab, and the four pages inside Now.
+- **Commands** — log a dose, open settings, switch theme, export the log as JSON or CSV.
+
+Arrow keys move, <kbd>Enter</kbd> opens, <kbd>Shift</kbd>+<kbd>Enter</kbd> pins the
+highlighted compound. With nothing typed it is a launcher: pinned compounds first, then
+what you were last looking at, then everything the app can do.
+
+### Pins and recents
+
+A database this size is mostly not about any one reader. The handful that are get a star
+— from the substance page, from the palette, or with <kbd>P</kbd> — and sit at the top of
+the palette and in a strip above the substance list. Recently viewed compounds fill in
+underneath, so getting back to something from five minutes ago is not a second search.
+
+Both live in the same local preferences blob as everything else, and neither leaves the
+browser.
+
+### Themes
+
+Three settings — match the system, dark, light — in the application bar and in the
+settings panel. Every colour in the stylesheet resolves through a token, so the light
+theme is a redefinition rather than a second stylesheet: the tinted families (red,
+orange, amber, green, blue, violet) keep their hue and their meaning while the surface
+and the foreground swap ends.
+
+It reaches further than the chrome. The categorical series colours the timeline draws
+with, and the element colours in the structure renderer, are read from custom properties
+rather than baked into the JavaScript, so a chart in light mode is drawn in a palette
+dark enough to read on white rather than the same pale blues turned invisible.
+
+"Match the system" is a live setting, not a one-time read: the app follows the OS if it
+flips at dusk while the page is open.
+
+### Keyboard
+
+<kbd>?</kbd> shows the full list. In brief: <kbd>1</kbd>–<kbd>6</kbd> switch tabs,
+<kbd>N</kbd> logs a dose, <kbd>T</kbd> switches theme, <kbd>,</kbd> opens settings,
+<kbd>P</kbd> pins the substance you are reading, and <kbd>Esc</kbd> closes whatever is
+open — a modal first, then a substance page back to the list. Single-letter shortcuts are
+ignored while you are typing in a field.
+
+### Addresses
+
+Every screen has one, in the hash: `#/now/timeline`, `#/interactions`,
+`#/substances/benzo`, `#/substance/alprazolam`. That means a compound can be
+bookmarked, linked to, and returned to with the browser's own Back button, and a refresh
+lands where you were rather than wherever the app felt like starting.
+
+The direction of the binding matters: `render()` is the only thing that knows what is on
+screen, so it is the only thing that writes the address. A hash change the app did not
+cause — Back, Forward, a pasted link — is read the other way, into the state. An address
+that does not parse falls through to the default view instead of a blank screen.
+
+The document title follows too (`Alprazolam — drug-info`), because a bookmark list of
+eleven identical titles is not a bookmark list.
+
+### On a phone
+
+Below 700 px the tabs leave the top of the page and become a fixed bottom bar with icons,
+which is both where a thumb already is and the only way to show all six at once — the
+scrolling strip they replaced put Patterns and FAQ off the right-hand edge with nothing
+to say they were there.
+
+The icons are drawn rather than typed. The glyphs they replace (◐ ☾ ⌨ ⚗) render at
+different weights and baselines across platforms and several fall back to a tofu box on
+Windows, which is where this is mostly read.
+
+### Printing
+
+A substance page is reference material, and reference material gets printed and taken
+somewhere. Printing drops the chrome, the controls and anything that only works by being
+clicked, forces every collapsed section open — a printout of seven headings with nothing
+under them is worse than no printout — keeps headings with what they introduce, and
+switches to ink on white regardless of the theme on screen.
+
+### Focus and assistive technology
+
+Beyond the shortcuts listed above: a skip link ahead of everything else in the tab order, since ten
+controls sit between the top of the page and the content on every screen. Modals behave
+like dialogs — they take focus when they open, keep Tab inside themselves, name
+themselves from their own heading, stop the page behind them scrolling, and hand focus
+back to whatever opened them. `:focus-visible` rings are on every control, which matters
+here because most of them are buttons with their border removed.
+
+### Contextual help
+
+Fifty answers about how the app works sat in a tab at the far end of the nav, read by nobody
+who had a question about the screen in front of them. Each tab now carries a small `?` beside
+its heading that opens the FAQ filtered to that tab's own group, with a way back to all fifty.
+The FAQ itself has a strip of its groups across the top and an expand-all, for the reader who
+would rather use the browser's own find-in-page.
+
+### Saying the worst thing first
+
+Two places where the interface was sorting correctly and presenting badly:
+
+The **interaction checker** ranks pairs worst-first, which meant the most dangerous
+combination in a list was rendered as row one of ten — same size, same weight, one line of
+mechanism, and the explanation a click away. When anything reaches *dangerous* or *unsafe* it
+now gets said out loud above the list, with the mechanism and what it actually does to
+somebody. Caution and below do not: a page that shouts about everything is a page nobody reads
+carefully.
+
+The **solution calculator** rendered its mixture checks two different ways depending on which
+branch of the tab you were in — and in one of them, one full-width box per check, each with
+its own identical "Mixture check" heading. Three stacked boxes all called the same thing are
+not three findings, they are one list that forgot it was a list. There is one panel now, worst
+first, and "Alprazolam will not all dissolve" is no longer the third of three identical-looking
+notes about freezing points.
+
+### Confirmations and undo
+
+Deleting a dose does not ask first. It deletes, then offers an undo in the toast that
+follows, which is faster to reach than an OK button and does not stand between the reader
+and the twenty rows they meant to clear. Form validation reports the same way — the
+message appears without taking focus, and focus goes to the field that needs fixing.
 
 ## Use cases
 
@@ -135,27 +293,39 @@ morphine reaches 37% against codeine's own 51%, as a prodrug should. Curves are 
 `derived`, the caveat is stated in full under the chart, and a metabolite with no recorded
 relative potency is left off this view rather than guessed at.
 
-**The legend is a live readout, in whatever the axis is showing.** Scrub the cursor and the
-figure beside every name updates:
+**Reading the chart is a hover, not a legend.** Hover anywhere on it, wait half a second,
+and a readout appears at the pointer and follows it — the moment under the pointer, every
+compound present at it, largest first:
 
-| Axis | Legend shows |
+| Axis | The readout shows |
 |---|---|
 | `mg` | milligrams in the body at that moment |
 | `%` | that compound's share of its own peak |
-| `effect` | its share of the combined effect of everything active — how much of what you are feeling is coming from each one. The shares sum to 100% |
+| `effect` | its share of the combined effect of everything active — how much of what you are feeling is coming from each one |
 
-**It lists only what is actually present, largest first, re-sorting as you scrub.** A row
-with nothing to report is not listed — it used to sit there reading "—", which is a
-swatch, a name and a dash spending a line to say a compound is absent, and on a log with
-a few doses in it most of the legend was that. The curve is still drawn; it is flat on
-the axis, which is the same statement made in the place that has room for it.
+It was a fixed legend under the chart, and on a busy log that was a dozen rows of text
+pushing the cards off the screen — while answering for wherever the scrub cursor happened
+to be parked rather than for wherever you were looking. As a tooltip it does both jobs
+better: the chart can be read without moving the cursor, and the cards below still answer
+for the cursor.
 
-What is left sorts by the figure it is displaying. The build order — parents first, then
-by share of the dose — still does its job upstream, where it decides which curves survive
-the cap when there are more than the chart can carry; as a *reading* order, next to a
-column of live percentages, it looked like no order at all. What each curve is coloured is
-deliberately left alone: a swatch that changed colour when one compound overtook another
-would make the chart above it unreadable.
+**The half-second dwell is deliberate.** Appearing instantly means it flashes up every time
+the pointer crosses the chart on its way somewhere else; half a second is long enough that
+only an intentional hover triggers it and short enough not to feel broken. It is suppressed
+for touch, where a tooltip under a finger is hidden by the finger and the tap should scrub
+instead.
+
+Anything with nothing to report is left out rather than listed reading "—", and what
+remains is sorted by the figure it is displaying. The build order — parents first, then by
+share of the dose — still does its job upstream, where it decides which curves survive the
+cap when there are more than the chart can carry. Colours are deliberately fixed: a swatch
+that changed colour when one compound overtook another would make the chart unreadable.
+
+**The controls sit above the chart**, over the thing they control rather than below it. The
+cursor time is a heading-sized readout with how far it is from now beside it, and there is
+a field to type a moment into — hunting for a particular minute with a slider a pixel at a
+time is not a thing anyone should have to do. A time outside the visible window clamps to
+its edge rather than silently doing nothing.
 
 **The cards below lead with the concentration**, not the amount. Every published
 threshold, therapeutic window and toxic level is written as a concentration, so a
@@ -235,6 +405,20 @@ about five milligrams of morphine; the heroin card goes, the morphine card stays
 cleared dose is still walked for what it left behind. What a cleared dose does lose is its
 place in the interaction list underneath — an interaction needs something to interact.
 
+### "There are thirty curves on this chart and I can't read any of them."
+
+With metabolites on, a busy day is thirty-odd curves and the chart draws the eighteen largest
+of them in ten repeating colours. That is not a chart, it is a plaid.
+
+Focus fixes it: one chip per substance on board, and picking one draws that substance and the
+things it turned into — three to five lines instead of eighteen. It filters the doses rather
+than the finished series, so the metabolite curves, the legend, the scrub cards and the hover
+readout all follow from it without any of them needing to know it exists.
+
+The note under an over-full chart carries both ways out of it rather than just reporting the
+number: *"Showing the 18 largest of 34 curves. Focus on one substance or hide metabolites to
+thin it out."*
+
 ### "I redosed. What did that actually do to the peak?"
 
 Switch the timeline from **Separate** to **Combined**. Separate gives one curve per dose,
@@ -282,6 +466,53 @@ The third layer is the one that catches things a lookup table misses. Logging
 fluoxetine alongside MDMA stretches the MDMA curve because CYP2D6 inhibition raises its
 half-life from about 8 h to about 17 h — the real documented mechanism, computed from
 the fraction of clearance that runs through that enzyme.
+
+### "I can't dissolve it. Check my arithmetic anyway."
+
+The Solution tab has a second mode: **Dry mix**, which drops the solvent entirely and works in
+mass fractions. Cut 100 mg of alprazolam into 10 g of lactose and a weighed 100 mg portion
+carries 990 µg — the same problem a solution solves, measured on a scale instead of in a
+syringe.
+
+It exists because volumetric dosing is not always available. Some compounds will not go into
+anything you would put in your body, some people have a scale and no syringe, and a capsule
+has to be filled with a powder whatever the arithmetic was done in.
+
+**It is the weaker technique and the tab says so every time.** A liquid mixes itself; two
+powders do not. They separate by particle size and density every time the jar is moved, so a
+scoop from a poorly mixed batch can carry several times what the arithmetic says — and the
+more dilute the mixture, the worse a clump of undiluted active is. Nothing computed from the
+masses can detect that, so the warning is unconditional rather than threshold-triggered.
+
+What it does check:
+
+| | |
+|---|---|
+| **Dilution** | 1 part active to N parts everything else, by mass |
+| **Scale error** | ±5 mg is realistic for a milligram scale, so a 20 mg portion is a ±25% operation — and the warning says what that is in milligrams of the actual active |
+| **Per gram** | what a gram of the finished powder carries, which is the number to write on the jar |
+| **No filler** | if there is no inactive in the mixture it is not a dilution, it is two actives weighed together, and it says so |
+| **Overshoot** | a portion delivering more than three times a common dose usually means the filler is far too little |
+
+Saved recipes carry the mode, because a dry mixture reloaded as a solution would silently
+change what every per-dose figure meant. Recipes saved before the mode existed have no flag,
+and a missing flag means what it always meant.
+
+### "What is actually in this bottle?"
+
+The contents of the mixture used to live entirely behind a "View ingredients (1)" button. The
+reasoning was sound — the full per-ingredient figures are eight numbers apiece, and stacking
+them inline turned the tab into a wall of boxes — but the conclusion went too far: what is in
+the bottle is the one thing the page is about, and it was the one thing you could not see.
+
+The amounts are listed where the mixture is being built, one line each, with the colour each
+ingredient carries in the composition chart beside it. The eight derived figures stay behind a
+button, now called "All figures".
+
+The working mixture also survives a reload. It used to live only in memory, so a refresh — or
+following a link and coming back — silently discarded a recipe someone had just weighed out
+ingredient by ingredient. Saving a solution is a deliberate act of naming and filing something;
+not losing your work is not the same thing and should not have to be asked for.
 
 ### "I'm dissolving this to dose it by volume. Check my arithmetic."
 
@@ -397,6 +628,26 @@ The single most important excipient note in the database: **crushing a hypromell
 matrix tablet destroys its controlled release.** The polymer gel layer *is* the release
 mechanism — break it and 12 or 24 hours of dose becomes immediately available. That has
 killed people with sustained-release opioids.
+
+### "Show me only what has actually been measured."
+
+The substance list sorts three ways — A–Z, half-life, and data quality — and can be
+narrowed to compounds whose half-life was measured in humans rather than estimated or
+taken from a structural analogue. Sorting by half-life answers "what here is
+short-acting"; sorting by data quality puts the compounds with real human data first,
+which is the honest way to browse a database where most of the figures are extrapolated.
+
+Both settings persist. A search keeps its own relevance order rather than being
+re-sorted, because burying an exact match under an alphabetical list is not a feature.
+
+### "Just tell me the dose and how long it lasts."
+
+A substance page used to open with a name, three chips, a list of aliases and a CAS number —
+and the five things somebody actually came for were spread across three sections, one of them
+collapsed. They are one strip under the title now: common dose for the usual route, onset,
+duration, half-life with its confidence, and how long until it is effectively clear. A
+compound with no route — a metabolite, say — shows the two that still apply rather than
+inventing the rest.
 
 ### "Tell me about this specific compound."
 
@@ -628,6 +879,13 @@ across every enzyme named in the row when a reaction lists several. A product no
 that metabolite's detail. The standalone Metabolites section is gone as a result: it
 listed the same products a screen further down, and the detail now opens from the thing
 you were already looking at.
+
+### "When do I actually take this?"
+
+Patterns can answer the most obvious pattern question there is now: a count of logged doses by
+the hour of day, over the whole log, with the busiest hour named and highlighted. Deliberately
+unsmoothed and deliberately hedged — it says when you *log*, which is not quite when you take
+something, and an entry added the morning after lands in the morning.
 
 ### "Am I using this too often?"
 
@@ -1320,7 +1578,7 @@ pharmacology, so they remain listed under their parent drug instead.
 
 ```
 index.html            shell + script loading order
-css/styles.css
+css/styles.css        design tokens (two palettes, one set of names) + components
 js/db.js              schema, registry, lookup, enzyme index, identifiers
 js/pk.js              Bateman model, ka solver, effect envelope, recursive metabolite
                       tree, presystemic/systemic formation split, tolerance
@@ -1332,6 +1590,10 @@ js/profile.js         body mass, per-enzyme CYP metaboliser status, Boer plasma
                       volume and volume of distribution, fed back into the model
 js/structure.js       SMILES parser, 2D layout and SVG structure renderer
 js/solution.js        mixture maths + plain-text report
+js/ui.js              the shell: theme, command palette, toasts, keyboard,
+                      pins and recents. Knows nothing about pharmacokinetics;
+                      app.js registers what the palette can do rather than the
+                      palette knowing about app.js
 js/app.js             UI
 js/data/*.js          the substance database — one file per class, plus the
                       decorator files that run last and attach reference data:

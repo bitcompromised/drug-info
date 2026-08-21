@@ -2,23 +2,235 @@
    drug-info — styles
    ========================================================================== */
 
+/* --------------------------------------------------------------------------
+   Design tokens
+   --------------------------------------------------------------------------
+   Two palettes, one set of names. Every colour in this file resolves through
+   a token, so the light theme is a redefinition rather than a second
+   stylesheet. Families (red / orange / amber / green / blue / violet) each
+   carry a tinted surface, a line and a foreground that stays legible on that
+   surface in both themes — the pills, badges and warning blocks all draw
+   from them instead of inventing their own hexes.
+
+   Dark is the default because the app is read at night as often as by day.
+   [data-theme] set by the theme switch wins over the system preference.
+   -------------------------------------------------------------------------- */
+
 :root {
+  color-scheme: dark;
+
+  /* surfaces */
   --bg: #0e0f13;
   --bg-2: #15171d;
   --bg-3: #1c1f27;
+  --surface-sunken: #1a1d24;
+  --code-bg: #0a0b0e;
+  --elevated: #1a1d25;
+
+  /* lines */
   --border: #2a2e39;
   --border-soft: #22252e;
+  --border-strong: #3a3f4a;
+  --grid: #23262f;
+  --flow: #3d4654;
+
+  /* text */
   --text: #e4e6ec;
+  --text-soft: #c8ccd6;
   --text-dim: #9a9fae;
+  --text-mute: #8a90a0;
   --text-faint: #6b7080;
+
+  /* brand */
   --accent: #5b9dd9;
   --accent-dim: #3d6d99;
+  --accent-soft: #1b2a3a;
+  --on-accent: #ffffff;
+
+  /* semantic solids */
   --danger: #e5484d;
   --warn: #f76808;
   --caution: #ffb224;
   --ok: #46a758;
-  --radius: 8px;
+  --cursor: #e3c75a;
+  --on-danger: #14090b;
+  --on-caution: #1a1408;
+
+  /* red */
+  --red-bg: #1e1214;
+  --red-bg-2: #3a1518;
+  --red-line: #4a2226;
+  --red-fg: #ff9095;
+  --red-fg-2: #ffbfc2;
+  --red-fg-dim: #e08a8a;
+
+  /* orange */
+  --orange-bg: #2a1a10;
+  --orange-line: #5c3f22;
+  --orange-fg: #ffa066;
+  --orange-fg-dim: #e8a86a;
+
+  /* amber */
+  --amber-bg: #251f10;
+  --amber-line: #4a3520;
+  --amber-fg: #ffcc66;
+  --amber-fg-dim: #e8c46a;
+  --amber-fg-soft: #d9c9b0;
+  --amber-fg-2: #f0dcc0;
+
+  /* green */
+  --green-bg: #14251a;
+  --green-line: #2d5c37;
+  --green-fg: #7fd18f;
+
+  /* blue */
+  --blue-bg: #14202e;
+  --blue-bg-2: #1e2a3d;
+  --blue-line: #2b4257;
+  --blue-fg: #6fa8d9;
+  --blue-fg-2: #8ec5f0;
+
+  /* violet */
+  --violet-bg: #241f2e;
+  --violet-line: #443a5a;
+  --violet-fg: #b39ad9;
+  --violet-fg-2: #c9bfe0;
+  --violet-solid: #7f6bb0;
+
+  /* depth */
+  --scrim: rgba(6, 7, 10, .72);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .35);
+  --shadow-2: 0 8px 24px rgba(0, 0, 0, .5);
+  --shadow-3: 0 18px 48px rgba(0, 0, 0, .6);
+
+  /* shape and type */
+  --radius: 9px;
+  --radius-sm: 6px;
+  --radius-lg: 14px;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
+          Roboto, Helvetica, Arial, sans-serif;
+
+  /* motion */
+  --fast: 110ms cubic-bezier(.3, .7, .4, 1);
+  --med: 200ms cubic-bezier(.3, .7, .4, 1);
+
+  --shell-max: 1180px;
+}
+
+/* --------------------------------------------------------------------------
+   Light theme
+   --------------------------------------------------------------------------
+   Not an inversion: the tinted families keep their hue and their meaning, but
+   the surface becomes the pale end and the foreground the saturated end, so a
+   "dangerous" pill still reads as red-on-red without turning into a glare.
+   Contrast for every foreground/surface pair here clears WCAG AA at body size.
+   -------------------------------------------------------------------------- */
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f6f7f9;
+  --bg-2: #ffffff;
+  --bg-3: #eef0f4;
+  --surface-sunken: #e9ecf1;
+  --code-bg: #f0f2f6;
+  --elevated: #ffffff;
+
+  --border: #d3d8e0;
+  --border-soft: #e3e7ed;
+  --border-strong: #b3bac6;
+  --grid: #e6e9ef;
+  --flow: #9aa3b2;
+
+  --text: #1a1d24;
+  --text-soft: #333947;
+  --text-dim: #5a6270;
+  --text-mute: #6d7583;
+  --text-faint: #858d9c;
+
+  --accent: #1f6fb8;
+  --accent-dim: #2b7cc4;
+  --accent-soft: #e4eefa;
+  --on-accent: #ffffff;
+
+  --danger: #c62a30;
+  --warn: #b8500a;
+  --caution: #9a6a00;
+  --ok: #1f7a36;
+  --cursor: #9a7400;
+  --on-danger: #ffffff;
+  --on-caution: #2a1f00;
+
+  --red-bg: #fdeced;
+  --red-bg-2: #f9d5d7;
+  --red-line: #f0b8bb;
+  --red-fg: #b3232a;
+  --red-fg-2: #8f1a20;
+  --red-fg-dim: #a83b40;
+
+  --orange-bg: #fdefe3;
+  --orange-line: #f0cfae;
+  --orange-fg: #a04c07;
+  --orange-fg-dim: #8d4a12;
+
+  --amber-bg: #fbf3dc;
+  --amber-line: #e8d5a4;
+  --amber-fg: #7d5b00;
+  --amber-fg-dim: #7a5a10;
+  --amber-fg-soft: #6b5330;
+  --amber-fg-2: #5c4718;
+
+  --green-bg: #e6f6ea;
+  --green-line: #b6dfc1;
+  --green-fg: #1c6b31;
+
+  --blue-bg: #e7f0fb;
+  --blue-bg-2: #d8e7f8;
+  --blue-line: #b6cfec;
+  --blue-fg: #1a5f9e;
+  --blue-fg-2: #124a80;
+
+  --violet-bg: #f0ecfa;
+  --violet-line: #d3c9ec;
+  --violet-fg: #5b3f96;
+  --violet-fg-2: #4a3080;
+  --violet-solid: #6d4fb5;
+
+  --scrim: rgba(24, 28, 36, .38);
+  --shadow-1: 0 1px 2px rgba(20, 26, 38, .07);
+  --shadow-2: 0 8px 24px rgba(20, 26, 38, .13);
+  --shadow-3: 0 18px 48px rgba(20, 26, 38, .18);
+}
+
+/* System preference, only while no explicit choice has been made. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]):not([data-theme="light"]) {
+    color-scheme: light;
+    --bg: #f6f7f9; --bg-2: #ffffff; --bg-3: #eef0f4;
+    --surface-sunken: #e9ecf1; --code-bg: #f0f2f6; --elevated: #ffffff;
+    --border: #d3d8e0; --border-soft: #e3e7ed; --border-strong: #b3bac6;
+    --grid: #e6e9ef; --flow: #9aa3b2;
+    --text: #1a1d24; --text-soft: #333947; --text-dim: #5a6270;
+    --text-mute: #6d7583; --text-faint: #858d9c;
+    --accent: #1f6fb8; --accent-dim: #2b7cc4; --accent-soft: #e4eefa; --on-accent: #ffffff;
+    --danger: #c62a30; --warn: #b8500a; --caution: #9a6a00; --ok: #1f7a36;
+    --cursor: #9a7400; --on-danger: #ffffff; --on-caution: #2a1f00;
+    --red-bg: #fdeced; --red-bg-2: #f9d5d7; --red-line: #f0b8bb;
+    --red-fg: #b3232a; --red-fg-2: #8f1a20; --red-fg-dim: #a83b40;
+    --orange-bg: #fdefe3; --orange-line: #f0cfae; --orange-fg: #a04c07; --orange-fg-dim: #8d4a12;
+    --amber-bg: #fbf3dc; --amber-line: #e8d5a4; --amber-fg: #7d5b00;
+    --amber-fg-dim: #7a5a10; --amber-fg-soft: #6b5330; --amber-fg-2: #5c4718;
+    --green-bg: #e6f6ea; --green-line: #b6dfc1; --green-fg: #1c6b31;
+    --blue-bg: #e7f0fb; --blue-bg-2: #d8e7f8; --blue-line: #b6cfec;
+    --blue-fg: #1a5f9e; --blue-fg-2: #124a80;
+    --violet-bg: #f0ecfa; --violet-line: #d3c9ec; --violet-fg: #5b3f96;
+    --violet-fg-2: #4a3080; --violet-solid: #6d4fb5;
+    --scrim: rgba(24, 28, 36, .38);
+    --shadow-1: 0 1px 2px rgba(20, 26, 38, .07);
+    --shadow-2: 0 8px 24px rgba(20, 26, 38, .13);
+    --shadow-3: 0 18px 48px rgba(20, 26, 38, .18);
+  }
 }
 
 * { box-sizing: border-box; }
@@ -63,11 +275,11 @@ nav#nav { display: flex; gap: 2px; margin-top: 12px; overflow-x: auto; }
 main { max-width: 1080px; margin: 0 auto; padding: 24px; }
 
 .disclaimer {
-  background: #1a1410; border: 1px solid #4a3520; border-left: 3px solid var(--caution);
+  background: var(--amber-bg); border: 1px solid var(--amber-line); border-left: 3px solid var(--caution);
   border-radius: var(--radius); padding: 12px 16px; margin: 0 0 22px;
-  font-size: 13.5px; color: #d9c9b0;
+  font-size: 13.5px; color: var(--amber-fg-soft);
 }
-.disclaimer strong { color: #f0dcc0; }
+.disclaimer strong { color: var(--amber-fg-2); }
 
 footer { max-width: 1080px; margin: 40px auto 60px; padding: 0 24px; color: var(--text-faint); font-size: 12.5px; }
 
@@ -103,7 +315,29 @@ section { margin: 26px 0; }
   background: var(--bg-2); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 14px 16px;
 }
-.card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+/* A title plus however many pills the compound earns, and that count is not
+   fixed: a metabolite that outlasts its parent carries three, and the names
+   run from "LSD" to "Hydroxypentenyl-MDMB-4en-PINACA".
+
+   This was nowrap, which meant the row could only overflow — a pill is
+   `white-space: nowrap` and so cannot shrink below its own text, and a flex
+   line that cannot shrink runs past its container instead. At a narrow grid
+   column the pills spilled a hundred pixels past the card edge, were cut off
+   at it, and took the whole page into a horizontal scroll with them.
+
+   Wrapping instead. `margin-right: auto` on the title reproduces exactly what
+   space-between did while everything fits on one line — pills against the
+   right edge — and lets the overflow fall to a second line left-aligned,
+   which is where a wrapped row reads. */
+.card-head {
+  display: flex; align-items: center; justify-content: flex-start;
+  gap: 6px 10px; flex-wrap: wrap;
+}
+.card-head > :first-child { margin-right: auto; }
+/* Break a long compound name rather than let it force the row wider than the
+   card it sits in. */
+.card-head .link-title,
+.card-head .link-title-static { min-width: 0; overflow-wrap: anywhere; }
 .card-sub { color: var(--text-dim); font-size: 12.5px; margin: 2px 0 12px; }
 
 .link-title {
@@ -139,33 +373,37 @@ dl.wide-kv { grid-template-columns: 210px 1fr; gap: 6px 16px; font-size: 14px; }
   border: 1px solid var(--border); color: var(--text-dim); vertical-align: middle;
   text-transform: uppercase; letter-spacing: .04em; font-weight: 600;
 }
-.conf-measured  { color: #7fd18f; border-color: #2d5c37; background: #14251a; }
-.conf-estimated { color: #e8c46a; border-color: #5c4a1e; background: #251f10; }
-.conf-analogue  { color: #e39a5e; border-color: #5c3f22; background: #251a10; }
-.conf-community { color: #8fb8e8; border-color: #2c4463; background: #131c28; }
-.conf-anecdotal { color: #d99ad0; border-color: #55305a; background: #241a26; }
-.conf-unknown   { color: #9a9fae; border-color: #3a3f4a; background: #1a1d24; }
+.conf-measured  { color: var(--green-fg); border-color: var(--green-line); background: var(--green-bg); }
+.conf-estimated { color: var(--amber-fg-dim); border-color: var(--amber-line); background: var(--amber-bg); }
+.conf-analogue  { color: var(--orange-fg-dim); border-color: var(--orange-line); background: var(--orange-bg); }
+.conf-community { color: var(--blue-fg); border-color: var(--blue-line); background: var(--blue-bg); }
+.conf-anecdotal { color: var(--violet-fg); border-color: var(--violet-line); background: var(--violet-bg); }
+.conf-unknown   { color: var(--text-dim); border-color: var(--border-strong); background: var(--surface-sunken); }
 
 .pill {
   display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px;
   background: var(--bg-3); color: var(--text-dim); white-space: nowrap;
+  /* Never squeezed narrower than its own label, and never wider than the row
+     it wrapped onto. Both are inert outside a flex container, which is most
+     of the places a pill appears. */
+  flex: 0 0 auto; max-width: 100%;
 }
-.pill.ok   { background: #14251a; color: #7fd18f; }
-.pill.warn { background: #2a1a10; color: #e8a86a; }
+.pill.ok   { background: var(--green-bg); color: var(--green-fg); }
+.pill.warn { background: var(--orange-bg); color: var(--orange-fg-dim); }
 
-.tier-threshold, .pill.tier-threshold { background: #1a1d24; color: #8a90a0; }
-.tier-light,     .pill.tier-light     { background: #14251f; color: #6fc9a8; }
-.tier-common,    .pill.tier-common    { background: #14202e; color: #6fa8d9; }
-.tier-strong,    .pill.tier-strong    { background: #2a1f10; color: #e0b060; }
-.tier-heavy,     .pill.tier-heavy     { background: #2e1416; color: #e08a8a; }
-.tier-unknown, .tier-sub-threshold    { background: #1a1d24; color: #8a90a0; }
+.tier-threshold, .pill.tier-threshold { background: var(--surface-sunken); color: var(--text-mute); }
+.tier-light,     .pill.tier-light     { background: var(--green-bg); color: var(--green-fg); }
+.tier-common,    .pill.tier-common    { background: var(--blue-bg); color: var(--blue-fg); }
+.tier-strong,    .pill.tier-strong    { background: var(--amber-bg); color: var(--amber-fg-dim); }
+.tier-heavy,     .pill.tier-heavy     { background: var(--red-bg); color: var(--red-fg-dim); }
+.tier-unknown, .tier-sub-threshold    { background: var(--surface-sunken); color: var(--text-mute); }
 
-.phase-waiting  { background: #1a1d24; color: #8a90a0; }
-.phase-comeup   { background: #14202e; color: #6fa8d9; }
-.phase-peak     { background: #1e2a3d; color: #8ec5f0; }
-.phase-offset   { background: #24202e; color: #a894d0; }
-.phase-after    { background: #1f2028; color: #9a9fae; }
-.phase-residual { background: #1a1d24; color: #7a808f; }
+.phase-waiting  { background: var(--surface-sunken); color: var(--text-mute); }
+.phase-comeup   { background: var(--blue-bg); color: var(--blue-fg); }
+.phase-peak     { background: var(--blue-bg-2); color: var(--blue-fg-2); }
+.phase-offset   { background: var(--violet-bg); color: var(--violet-fg); }
+.phase-after    { background: var(--surface-sunken); color: var(--text-dim); }
+.phase-residual { background: var(--surface-sunken); color: var(--text-faint); }
 
 .tag-chip {
   display: inline-block; font-size: 11.5px; padding: 2px 8px; border-radius: 4px;
@@ -188,23 +426,23 @@ dl.wide-kv { grid-template-columns: 210px 1fr; gap: 6px 16px; font-size: 14px; }
 
 .enzyme-chip {
   display: inline-block; font-family: var(--mono); font-size: 11.5px;
-  background: #16202c; border: 1px solid #2b4257; color: #7fb4dd;
+  background: var(--blue-bg); border: 1px solid var(--blue-line); color: var(--blue-fg);
   border-radius: 4px; padding: 2px 7px; margin: 2px 4px 2px 0; cursor: pointer;
 }
-.enzyme-chip:hover { background: #1c2c3c; border-color: var(--accent); }
-.enzyme-chip.inhibit { background: #2a1618; border-color: #5a2b30; color: #e59095; }
-.enzyme-chip.induce  { background: #16241a; border-color: #2c5233; color: #85c992; }
-.enzyme-chip.transporter { background: #241f2e; border-color: #443a5a; color: #b39ad9; cursor: default; }
-.note-pgx { background: #1a1726; border-left: 3px solid #7f6bb0; color: #c9bfe0; }
+.enzyme-chip:hover { background: var(--blue-bg-2); border-color: var(--accent); }
+.enzyme-chip.inhibit { background: var(--red-bg); border-color: var(--red-line); color: var(--red-fg-dim); }
+.enzyme-chip.induce  { background: var(--green-bg); border-color: var(--green-line); color: var(--green-fg); }
+.enzyme-chip.transporter { background: var(--violet-bg); border-color: var(--violet-line); color: var(--violet-fg); cursor: default; }
+.note-pgx { background: var(--violet-bg); border-left: 3px solid var(--violet-solid); color: var(--violet-fg-2); }
 
 /* ---------- interaction levels ---------- */
 
-.pill.level-dangerous { background: #2e1214; color: #ff8d90; }
-.pill.level-unsafe    { background: #2c1a0e; color: #ffa066; }
-.pill.level-caution   { background: #2c250e; color: #ffcc66; }
-.pill.level-decrease  { background: #212128; color: #a8adbb; }
-.pill.level-synergy   { background: #142430; color: #7fc0e8; }
-.pill.level-neutral   { background: #1a1d24; color: #8a90a0; }
+.pill.level-dangerous { background: var(--red-bg); color: var(--red-fg); }
+.pill.level-unsafe    { background: var(--orange-bg); color: var(--orange-fg); }
+.pill.level-caution   { background: var(--amber-bg); color: var(--amber-fg); }
+.pill.level-decrease  { background: var(--surface-sunken); color: var(--text-dim); }
+.pill.level-synergy   { background: var(--blue-bg); color: var(--blue-fg); }
+.pill.level-neutral   { background: var(--surface-sunken); color: var(--text-mute); }
 
 .findings { display: flex; flex-direction: column; gap: 10px; }
 .finding {
@@ -214,7 +452,7 @@ dl.wide-kv { grid-template-columns: 210px 1fr; gap: 6px 16px; font-size: 14px; }
 .finding.level-dangerous { border-left-color: var(--danger); }
 .finding.level-unsafe    { border-left-color: var(--warn); }
 .finding.level-caution   { border-left-color: var(--caution); }
-.finding.level-decrease  { border-left-color: #6b7080; }
+.finding.level-decrease  { border-left-color: var(--text-faint); }
 .finding-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 7px; }
 .finding .mech { margin: 0 0 6px; font-size: 13.5px; }
 .finding .detail { margin: 0; font-size: 13.5px; color: var(--text-dim); }
@@ -223,17 +461,17 @@ dl.wide-kv { grid-template-columns: 210px 1fr; gap: 6px 16px; font-size: 14px; }
   background: var(--bg-3); border-radius: 6px; padding: 9px 12px;
   font-size: 13px; color: var(--text-dim); margin: 12px 0 0;
 }
-.note-warn { background: #241a10; color: #dcbe94; }
+.note-warn { background: var(--orange-bg); color: var(--amber-fg-soft); }
 .warn-block {
-  background: #1e1214; border: 1px solid #4a2226; border-radius: var(--radius);
+  background: var(--red-bg); border: 1px solid var(--red-line); border-radius: var(--radius);
   padding: 12px 16px; margin: 18px 0;
 }
-.warn-block h3 { margin: 0 0 8px; color: #ff9095; font-size: 14px; text-transform: uppercase; letter-spacing: .05em; }
+.warn-block h3 { margin: 0 0 8px; color: var(--red-fg); font-size: 14px; text-transform: uppercase; letter-spacing: .05em; }
 .warn-block ul { margin: 0; padding-left: 20px; }
 .warn-block li { margin-bottom: 7px; font-size: 13.5px; }
 /* At the very top of a substance page, right under the standing disclaimer. */
 .warn-block-top { margin-top: 0; }
-.warn-subject { text-transform: none; letter-spacing: 0; color: #ffbfc2; }
+.warn-subject { text-transform: none; letter-spacing: 0; color: var(--red-fg-2); }
 
 /* ---------- forms ---------- */
 
@@ -279,7 +517,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
   display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 30;
   background: var(--bg-3); border: 1px solid var(--border); border-radius: 6px;
   margin-top: 3px; max-height: 300px; overflow-y: auto;
-  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  box-shadow: var(--shadow-2);
 }
 .autocomplete.open { display: block; }
 .ac-item {
@@ -329,10 +567,10 @@ td.notes { color: var(--text-dim); max-width: 240px; }
 .matrix th.row-h { white-space: nowrap; background: var(--bg-3); }
 .matrix .cell { text-align: center; font-size: 10.5px; padding: 6px 8px; }
 .matrix .cell.self { background: var(--bg-3); }
-.matrix .cell.level-dangerous { background: #3a1518; color: #ff9ca0; }
-.matrix .cell.level-unsafe    { background: #351d10; color: #ffb07a; }
-.matrix .cell.level-caution   { background: #322a10; color: #ffd479; }
-.matrix .cell.level-decrease  { background: #232329; color: #a8adbb; }
+.matrix .cell.level-dangerous { background: var(--red-bg-2); color: var(--red-fg); }
+.matrix .cell.level-unsafe    { background: var(--orange-bg); color: var(--orange-fg); }
+.matrix .cell.level-caution   { background: var(--amber-bg); color: var(--amber-fg); }
+.matrix .cell.level-decrease  { background: var(--surface-sunken); color: var(--text-dim); }
 .matrix .cell.level-neutral   { background: var(--bg-2); color: var(--text-faint); }
 
 /* ---------- charts ---------- */
@@ -342,27 +580,27 @@ td.notes { color: var(--text-dim); max-width: 240px; }
   border-radius: var(--radius); padding: 10px; overflow-x: auto; margin: 12px 0;
 }
 .chart { width: 100%; height: auto; display: block; min-width: 620px; }
-.chart .grid { stroke: #23262f; stroke-width: 1; }
-.chart .axis { stroke: #3a3f4a; stroke-width: 1; }
+.chart .grid { stroke: var(--grid); stroke-width: 1; }
+.chart .axis { stroke: var(--border-strong); stroke-width: 1; }
 /* Row labels down the left of the potency chart. */
-.chart .row-label { fill: #d0d4de; font-size: 12.5px; }
+.chart .row-label { fill: var(--text-soft); font-size: 12.5px; }
 .chart .row-label.highlight { fill: var(--accent); font-weight: 600; }
-.chart .axis-label { fill: #767c8c; font-size: 10.5px; font-family: var(--mono); }
-.chart .value-label { fill: #9a9fae; font-size: 11px; font-family: var(--mono); }
-.chart .now-line { stroke: #e5484d; stroke-width: 1.5; stroke-dasharray: 4 3; }
-.chart .now-label { fill: #e5484d; font-size: 10.5px; font-weight: 600; }
-.chart .ref-line { stroke: #5a6070; stroke-width: 1; stroke-dasharray: 3 3; }
+.chart .axis-label { fill: var(--text-faint); font-size: 10.5px; font-family: var(--mono); }
+.chart .value-label { fill: var(--text-dim); font-size: 11px; font-family: var(--mono); }
+.chart .now-line { stroke: var(--danger); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.chart .now-label { fill: var(--danger); font-size: 10.5px; font-weight: 600; }
+.chart .ref-line { stroke: var(--text-faint); stroke-width: 1; stroke-dasharray: 3 3; }
 
 .pathway-diagram .node { stroke-width: 1; }
-.pathway-diagram .node-parent   { fill: #1e2a3d; stroke: #3d5f85; }
-.pathway-diagram .node-enzyme   { fill: #16202c; stroke: #2b4257; }
-.pathway-diagram .node-active   { fill: #14251a; stroke: #2d5c37; }
-.pathway-diagram .node-inactive { fill: #1c1f27; stroke: #2f3540; }
-.pathway-diagram .node-text { fill: #d5d9e2; font-size: 12px; }
-.pathway-diagram .node-text.enzyme { fill: #7fb4dd; font-family: var(--mono); font-size: 11.5px; }
-.pathway-diagram .flow { stroke: #3d4654; fill: none; }
-.pathway-diagram .flow-head { fill: #3d4654; }
-.pathway-diagram .flow-label { fill: #6b7080; font-size: 10px; }
+.pathway-diagram .node-parent   { fill: var(--blue-bg-2); stroke: var(--blue-line); }
+.pathway-diagram .node-enzyme   { fill: var(--blue-bg); stroke: var(--blue-line); }
+.pathway-diagram .node-active   { fill: var(--green-bg); stroke: var(--green-line); }
+.pathway-diagram .node-inactive { fill: var(--bg-3); stroke: var(--border-strong); }
+.pathway-diagram .node-text { fill: var(--text-soft); font-size: 12px; }
+.pathway-diagram .node-text.enzyme { fill: var(--blue-fg); font-family: var(--mono); font-size: 11.5px; }
+.pathway-diagram .flow { stroke: var(--flow); fill: none; }
+.pathway-diagram .flow-head { fill: var(--flow); }
+.pathway-diagram .flow-label { fill: var(--text-faint); font-size: 10px; }
 
 .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--text-dim); margin: 4px 0 14px; }
 .legend-item { display: inline-flex; align-items: center; gap: 6px; }
@@ -385,7 +623,7 @@ td.notes { color: var(--text-dim); max-width: 240px; }
 .class-head.collapsible:hover { color: var(--accent); border-bottom-color: var(--accent-dim); }
 .class-head.collapsible.open { color: var(--text-dim); }
 .class-head .caret { font-size: 9px; width: 9px; }
-.pill.kind-inactive { background: #1c1f27; color: #8a90a0; margin-left: 6px; }
+.pill.kind-inactive { background: var(--bg-3); color: var(--text-mute); margin-left: 6px; }
 
 /* Collapsible section headers, used on the Solution page. */
 .sec-head {
@@ -450,14 +688,14 @@ td.notes { color: var(--text-dim); max-width: 240px; }
 
 .metabolite-list { display: flex; flex-direction: column; gap: 8px; }
 .metabolite {
-  border: 1px solid var(--border-soft); border-left: 3px solid #2f3540;
+  border: 1px solid var(--border-soft); border-left: 3px solid var(--border-strong);
   border-radius: 6px; padding: 9px 12px; background: var(--bg-2);
 }
-.metabolite.active { border-left-color: #46a758; }
+.metabolite.active { border-left-color: var(--ok); }
 .met-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
-.pill.via-pill { background: #1e2430; color: #9ab4d0; font-style: italic; }
-.pill.met-active   { background: #14251a; color: #7fd18f; }
-.pill.met-inactive { background: #1c1f27; color: #8a90a0; }
+.pill.via-pill { background: var(--blue-bg); color: var(--blue-fg); font-style: italic; }
+.pill.met-active   { background: var(--green-bg); color: var(--green-fg); }
+.pill.met-inactive { background: var(--bg-3); color: var(--text-mute); }
 .met-note { margin: 5px 0 0; font-size: 13px; color: var(--text-dim); }
 
 .potency-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -487,7 +725,7 @@ td.notes { color: var(--text-dim); max-width: 240px; }
 /* ---------- modal ---------- */
 
 .modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 100;
+  position: fixed; inset: 0; background: var(--scrim); z-index: 100;
   display: flex; align-items: flex-start; justify-content: center; padding: 40px 20px; overflow-y: auto;
 }
 .modal {
@@ -515,8 +753,8 @@ td.notes { color: var(--text-dim); max-width: 240px; }
 .metab-table td { padding: 6px 10px; white-space: nowrap; }
 .metab-table td:first-child { white-space: normal; }
 .metab-table .parent-row td { background: var(--bg-3); }
-.metab-table .met-active-row td:first-child { border-left: 2px solid #46a758; }
-.pill.parent-pill { background: #1e2a3d; color: #8ec5f0; margin-left: 6px; }
+.metab-table .met-active-row td:first-child { border-left: 2px solid var(--ok); }
+.pill.parent-pill { background: var(--blue-bg-2); color: var(--blue-fg-2); margin-left: 6px; }
 .metab-table .pill { margin-left: 6px; }
 
 /* ---------- solution calculator ---------- */
@@ -534,7 +772,7 @@ td.notes { color: var(--text-dim); max-width: 240px; }
   border-radius: 4px; padding: 3px 9px; font: inherit; font-size: 12.5px; cursor: pointer;
 }
 .crumb:hover { border-color: var(--accent); color: var(--accent); }
-.crumb.current { background: var(--accent-dim); border-color: var(--accent); color: #fff; cursor: default; }
+.crumb.current { background: var(--accent-dim); border-color: var(--accent); color: var(--on-accent); cursor: default; }
 .crumb-sep { color: var(--text-faint); }
 .metab-explorer .metabolite-list { margin-top: 8px; }
 .metab-explorer h4 { margin-top: 22px; }
@@ -543,51 +781,51 @@ td.notes { color: var(--text-dim); max-width: 240px; }
 
 .isomer-list { display: flex; flex-direction: column; gap: 8px; }
 .isomer {
-  border: 1px solid var(--border-soft); border-left: 3px solid #2f3540;
+  border: 1px solid var(--border-soft); border-left: 3px solid var(--border-strong);
   border-radius: 6px; padding: 9px 12px; background: var(--bg-2);
 }
 .isomer.iso-prodrug  { border-left-color: var(--accent); }
 .isomer.iso-antagonistic { border-left-color: var(--caution); }
 .iso-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
-.pill.iso-pill-primary      { background: #14251a; color: #7fd18f; }
-.pill.iso-pill-secondary    { background: #14202e; color: #6fa8d9; }
-.pill.iso-pill-minor        { background: #1c1f27; color: #8a90a0; }
-.pill.iso-pill-inactive     { background: #1c1f27; color: #8a90a0; }
-.pill.iso-pill-prodrug      { background: #1e2a3d; color: #8ec5f0; }
-.pill.iso-pill-antagonistic { background: #2c250e; color: #ffcc66; }
-.pill.iso-pill-harmful      { background: #2e1214; color: #ff8d90; }
+.pill.iso-pill-primary      { background: var(--green-bg); color: var(--green-fg); }
+.pill.iso-pill-secondary    { background: var(--blue-bg); color: var(--blue-fg); }
+.pill.iso-pill-minor        { background: var(--bg-3); color: var(--text-mute); }
+.pill.iso-pill-inactive     { background: var(--bg-3); color: var(--text-mute); }
+.pill.iso-pill-prodrug      { background: var(--blue-bg-2); color: var(--blue-fg-2); }
+.pill.iso-pill-antagonistic { background: var(--amber-bg); color: var(--amber-fg); }
+.pill.iso-pill-harmful      { background: var(--red-bg); color: var(--red-fg); }
 
 /* ---------- timeline scrubbing ---------- */
 
 .chart-wrap.scrubbable { cursor: crosshair; touch-action: none; user-select: none; }
-.chart .cursor-line { stroke: #e3c75a; stroke-width: 1.5; }
-.chart .cursor-head { fill: #e3c75a; }
-.chart .cursor-label { fill: #e3c75a; font-size: 11px; font-weight: 700; font-family: var(--mono); }
+.chart .cursor-line { stroke: var(--cursor); stroke-width: 1.5; }
+.chart .cursor-head { fill: var(--cursor); }
+.chart .cursor-label { fill: var(--cursor); font-size: 11px; font-weight: 700; font-family: var(--mono); }
 
 .scrub-bar { display: flex; align-items: center; gap: 10px; margin: 6px 0 16px; flex-wrap: wrap; }
-.scrub-slider { flex: 1 1 260px; min-width: 180px; accent-color: #e3c75a; padding: 0; }
+.scrub-slider { flex: 1 1 260px; min-width: 180px; accent-color: var(--cursor); padding: 0; }
 .scrub-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .scrub-head h3 { margin: 0; font-family: var(--mono); }
 .scrub-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 .scrub-card {
   background: var(--bg-2); border: 1px solid var(--border);
-  border-left: 3px solid #e3c75a; border-radius: var(--radius); padding: 13px 15px;
+  border-left: 3px solid var(--cursor); border-radius: var(--radius); padding: 13px 15px;
 }
 .scrub-detail h4 { margin-top: 20px; }
 
 /* ---------- mixture-check banner ---------- */
 
 .mix-banner { border-radius: var(--radius); padding: 12px 16px; margin: 16px 0; border: 1px solid; }
-.mix-banner.mix-danger { background: #1e1214; border-color: #4a2226; }
-.mix-banner.mix-warn   { background: #1e1810; border-color: #4a3a1e; }
+.mix-banner.mix-danger { background: var(--red-bg); border-color: var(--red-line); }
+.mix-banner.mix-warn   { background: var(--amber-bg); border-color: var(--amber-line); }
 .mix-banner.mix-info   { background: var(--bg-2); border-color: var(--border); }
 .mix-banner-head { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
 .mix-icon {
   display: inline-flex; align-items: center; justify-content: center;
   width: 18px; height: 18px; border-radius: 50%; font-size: 12px; font-weight: 700;
 }
-.mix-danger .mix-icon { background: var(--danger); color: #14090b; }
-.mix-warn   .mix-icon { background: var(--caution); color: #1a1408; }
+.mix-danger .mix-icon { background: var(--danger); color: var(--on-danger); }
+.mix-warn   .mix-icon { background: var(--caution); color: var(--on-caution); }
 .mix-info   .mix-icon { background: var(--text-faint); color: var(--bg); }
 .mix-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
 .mix-item { display: flex; gap: 9px; font-size: 13.5px; line-height: 1.5; }
@@ -595,13 +833,13 @@ td.notes { color: var(--text-dim); max-width: 240px; }
   flex: 0 0 auto; font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
   font-weight: 700; padding: 1px 7px; border-radius: 3px; height: fit-content; margin-top: 2px;
 }
-.mix-tag-danger { background: #3a1518; color: #ff9ca0; }
-.mix-tag-warn   { background: #322a10; color: #ffd479; }
+.mix-tag-danger { background: var(--red-bg-2); color: var(--red-fg); }
+.mix-tag-warn   { background: var(--amber-bg); color: var(--amber-fg); }
 .mix-tag-info   { background: var(--bg-3); color: var(--text-dim); }
 
 .card-solvent { border-left: 3px solid var(--accent-dim); }
-.card-hazard  { border-left-color: var(--danger); background: #1c1416; }
-.card-inactive { opacity: .82; border-left: 3px solid #3a3f4a; }
+.card-hazard  { border-left-color: var(--danger); background: var(--red-bg); }
+.card-inactive { opacity: .82; border-left: 3px solid var(--border-strong); }
 .solvent-title { font-size: 15px; }
 .inactive-row td { color: var(--text-dim); }
 
@@ -621,16 +859,16 @@ td.notes { color: var(--text-dim); max-width: 240px; }
   border-left: 3px solid var(--border); border-radius: var(--radius); padding: 11px 13px;
 }
 .solvent-note p { margin: 0 0 5px; }
-.hazard-list { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; color: #e0aeae; }
+.hazard-list { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--red-fg-dim); }
 .hazard-list li { margin-bottom: 5px; }
 
-.stacked-bar .stack-pct { fill: #0e0f13; font-size: 11px; font-weight: 700; }
-.stacked-bar .stack-legend { fill: #b8bdc9; font-size: 12px; }
+.stacked-bar .stack-pct { fill: var(--bg); font-size: 11px; font-weight: 700; }
+.stacked-bar .stack-legend { fill: var(--text-soft); font-size: 12px; }
 
 pre.report {
-  background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 16px; overflow-x: auto; font-family: var(--mono); font-size: 12px;
-  line-height: 1.5; color: #c8ccd6; margin: 8px 0 0; white-space: pre;
+  line-height: 1.5; color: var(--text-soft); margin: 8px 0 0; white-space: pre;
 }
 
 /* ---------- responsive ---------- */
@@ -692,8 +930,6 @@ pre.report {
 .iso-cas-missing { color: var(--text-faint); font-style: italic; cursor: help; }
 
 /* ---- settings modal: body + CYP metaboliser status ---- */
-.tab-settings { margin-left: auto; font-family: var(--mono); font-size: 12px; }
-.tab-settings.muted-tab { opacity: 0.55; }
 .settings h2 { margin-top: 0; }
 .settings h3 { margin: 22px 0 6px; font-size: 15px; }
 .settings-summary { margin-top: 4px; }
@@ -748,9 +984,22 @@ pre.report {
 }
 .seg-btn + .seg-btn { border-left: 1px solid var(--border); }
 .seg-btn:hover { color: var(--text); }
-.seg-btn.active { background: var(--accent-dim); color: #fff; }
+.seg-btn.active { background: var(--accent-dim); color: var(--on-accent); }
 
 .log-modal h2 { margin-top: 0; }
+/* The Substance / Solution switch sits between the title and the form, so it
+   needs air on both sides — it decides what the form below it IS. */
+.log-modal .seg { margin: 0 0 14px; }
+/* Wide enough for the preview table's five columns without the modal
+   scrolling sideways on a laptop. */
+.modal:has(.sol-log) { max-width: 720px; }
+.sol-log-preview { display: flex; flex-direction: column; gap: 8px; }
+.sol-log-preview .table-wrap { margin: 0; }
+.sol-log-preview .tag-chip { margin-left: 6px; }
+
+/* Edit and Delete in one history cell. Without this they wrap onto separate
+   lines in the narrow actions column and double the row height. */
+.row-tools { display: flex; gap: 6px; justify-content: flex-end; }
 
 /* The mixture-summary box is gone: its figures are stat cards now, in the
    same row as the per-dose ones, since both answer "what is in this bottle".
@@ -803,7 +1052,7 @@ pre.report {
   color: var(--text-faint);
   white-space: nowrap;
 }
-.pill.kind-combined { background: var(--accent-dim); color: #fff; }
+.pill.kind-combined { background: var(--accent-dim); color: var(--on-accent); }
 .card-combined { border-color: var(--accent-dim); }
 .card-figure {
   font-family: var(--mono);
@@ -869,6 +1118,20 @@ pre.report {
   border-radius: var(--radius);
 }
 .info-harm h4 { color: var(--ok); }
+
+/* ---- the "synthesis" popup ----
+   Shares the info popup's layout. The one distinct block is the residue
+   field, which is the reason the panel exists and is marked as a caution
+   rather than as the green of harm-reduction advice — it describes what is
+   wrong with the supply, not what to do about it. */
+.modal:has(.synth-popup) { max-width: 760px; }
+.synth-impurities {
+  padding: 10px 13px;
+  background: var(--bg-3);
+  border-left: 3px solid var(--caution);
+  border-radius: var(--radius);
+}
+.synth-impurities h4 { color: var(--caution); }
 
 /* ---- forked pathway outcomes ---- */
 .outcome { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
@@ -936,7 +1199,7 @@ pre.report {
   cursor: pointer;
 }
 .subtab:hover { color: var(--text); border-color: var(--accent-dim); }
-.subtab.active { background: var(--accent-dim); border-color: var(--accent-dim); color: #fff; }
+.subtab.active { background: var(--accent-dim); border-color: var(--accent-dim); color: var(--on-accent); }
 .subtab-count {
   font-size: 11px;
   opacity: 0.75;
@@ -1295,10 +1558,10 @@ pre.report {
    Colour carries the seriousness; the layout deliberately avoids a dial,
    because these bands overlap and tolerance moves them further than their
    own width. */
-.pill.band-below       { background: #1a1d24; color: #8a90a0; }
-.pill.band-therapeutic { background: #12241a; color: #6fd39a; }
-.pill.band-toxic       { background: #2a2312; color: #e0b657; }
-.pill.band-fatal       { background: #2a1416; color: #ff9095; }
+.pill.band-below       { background: var(--surface-sunken); color: var(--text-mute); }
+.pill.band-therapeutic { background: var(--green-bg); color: var(--green-fg); }
+.pill.band-toxic       { background: var(--amber-bg); color: var(--amber-fg-dim); }
+.pill.band-fatal       { background: var(--red-bg); color: var(--red-fg); }
 
 .band-scale { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
 .band-row {
@@ -1337,3 +1600,962 @@ pre.report {
 @media (max-width: 560px) {
   .cyp-enzyme-row { flex-direction: column; align-items: stretch; }
 }
+
+/* The first-visit example notice. Deliberately not styled as a warning —
+   nothing is wrong — but it has to be impossible to mistake the example
+   data for the reader's own, so it sits above everything and carries its
+   own clear button. */
+.note-example {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+  background: var(--bg-2); border: 1px dashed var(--accent-dim);
+  border-left: 3px solid var(--accent);
+}
+.note-example .btn { flex: 0 0 auto; }
+
+/* ---------- timeline scrub bar, moved above the chart ---------- */
+
+/* The controls sit over the thing they control now, so the cursor position is
+   readable without scrolling past the chart to find it. */
+.scrub-bar-top { margin: 0 0 10px; flex-wrap: wrap; }
+
+.scrub-clock {
+  display: flex; align-items: baseline; gap: 8px;
+  flex: 0 0 auto; margin-right: 4px;
+}
+.scrub-clock-time {
+  font-family: var(--mono); font-size: 16px; color: var(--text);
+  letter-spacing: .01em; white-space: nowrap;
+}
+
+.scrub-jump { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.scrub-time {
+  font-family: var(--mono); font-size: 12px;
+  background: var(--bg-3); color: var(--text);
+  border: 1px solid var(--border); border-radius: 5px; padding: 4px 6px;
+  color-scheme: dark;
+}
+
+@media (max-width: 620px) {
+  /* The slider needs a whole row on a phone; everything else wraps around it. */
+  .scrub-bar-top .scrub-slider { order: 10; flex: 1 0 100%; }
+  .scrub-clock { flex: 1 0 100%; }
+}
+
+/* ---------- the hover readout ---------- */
+
+/* Fixed rather than absolute: it is positioned from pointer coordinates, which
+   are viewport coordinates, and it is appended to <body> so nothing in the
+   page can clip it. `pointer-events: none` matters — a tooltip that follows
+   the pointer would otherwise sit under it and swallow the move events that
+   keep it following. */
+.hover-readout {
+  position: fixed; z-index: 60; display: none;
+  min-width: 190px; max-width: min(340px, 92vw);
+  padding: 9px 11px;
+  background: var(--bg-2); border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-3);
+  pointer-events: none;
+}
+.hover-readout.open { display: block; }
+
+.hover-time {
+  font-family: var(--mono); font-size: 12.5px; color: var(--text);
+  padding-bottom: 6px; margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.hover-rows { display: flex; flex-direction: column; gap: 3px; }
+.hover-row { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.hover-name {
+  flex: 1 1 auto; min-width: 0; color: var(--text-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.hover-val {
+  flex: 0 0 auto; font-family: var(--mono); color: var(--text);
+}
+
+/* ==========================================================================
+   REVAMP LAYER
+   --------------------------------------------------------------------------
+   Everything below was added in the interface rework: the extra token
+   families the charts and structure drawings read, the base polish (focus
+   rings, motion, scrollbars), the new application bar, the command palette,
+   the toast stack, and the density and keyboard affordances that go with
+   them. It sits after the original rules deliberately — where it restyles an
+   existing component it is meant to win.
+   ========================================================================== */
+
+/* ---------- extra token families ---------- */
+
+:root {
+  /* Categorical series, read by charts.js. Ordered so neighbouring series
+     differ in hue AND in lightness — the timeline routinely draws six curves
+     at once and they have to be separable without consulting the legend. */
+  --series-1: #5b9dd9;
+  --series-2: #e8834a;
+  --series-3: #61c0a0;
+  --series-4: #c98bdb;
+  --series-5: #e3c75a;
+  --series-6: #7f8de8;
+  --series-7: #d76a8a;
+  --series-8: #8bbf5a;
+  --series-9: #4fb3bf;
+  --series-10: #d9a441;
+
+  /* Structure drawings. */
+  --atom-n: #5b9dd9;
+  --atom-o: #e5484d;
+  --atom-s: #d6a400;
+  --atom-p: #f76808;
+  --atom-hal: #46a758;
+  --atom-br: #b06a3b;
+  --atom-i: #8e5bd9;
+  --atom-b: #c98b6b;
+}
+
+:root[data-theme="light"] {
+  --series-1: #1f6fb8;
+  --series-2: #c2560f;
+  --series-3: #14806a;
+  --series-4: #8a4bb0;
+  --series-5: #8a6a00;
+  --series-6: #4a55c4;
+  --series-7: #b83c60;
+  --series-8: #4d7a1c;
+  --series-9: #10717d;
+  --series-10: #9c6a10;
+
+  --atom-n: #1f6fb8;
+  --atom-o: #c62a30;
+  --atom-s: #8a6a00;
+  --atom-p: #b8500a;
+  --atom-hal: #1f7a36;
+  --atom-br: #8a4a24;
+  --atom-i: #6d3fb0;
+  --atom-b: #96603f;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]):not([data-theme="light"]) {
+    --series-1: #1f6fb8; --series-2: #c2560f; --series-3: #14806a;
+    --series-4: #8a4bb0; --series-5: #8a6a00; --series-6: #4a55c4;
+    --series-7: #b83c60; --series-8: #4d7a1c; --series-9: #10717d;
+    --series-10: #9c6a10;
+    --atom-n: #1f6fb8; --atom-o: #c62a30; --atom-s: #8a6a00; --atom-p: #b8500a;
+    --atom-hal: #1f7a36; --atom-br: #8a4a24; --atom-i: #6d3fb0; --atom-b: #96603f;
+  }
+}
+
+/* ---------- base polish ---------- */
+
+body { font-family: var(--sans); }
+
+/* One visible focus treatment for the whole app. Half the controls here are
+   buttons with their border removed, which also removed the only thing a
+   keyboard user could see; :focus-visible restores it without putting a ring
+   around everything a mouse touches. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.btn:focus-visible, .tab:focus-visible, .subtab:focus-visible,
+.seg-btn:focus-visible, .drug-tile:focus-visible, .chip.clickable:focus-visible {
+  outline-offset: 1px;
+}
+
+::selection { background: var(--accent-dim); color: var(--on-accent); }
+
+/* Scrollbars that belong to the surface rather than to the OS default. */
+* { scrollbar-color: var(--border-strong) transparent; scrollbar-width: thin; }
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong); border-radius: 6px;
+  border: 3px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+/* Native controls follow the theme — a dark date picker on a white page is
+   the sort of thing that only shows up after the fact. */
+input, select, textarea { color-scheme: inherit; }
+.scrub-time { color-scheme: inherit; }
+
+.btn, .tab, .subtab, .seg-btn, .drug-tile, .card, .chip, .pair-row,
+.ac-item, .toggle-btn, .crumb, .sources-toggle {
+  transition: background var(--fast), border-color var(--fast),
+              color var(--fast), box-shadow var(--fast), transform var(--fast);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- application bar ---------- */
+
+header.top {
+  padding: 0;
+  background: color-mix(in srgb, var(--bg-2) 88%, transparent);
+  backdrop-filter: saturate(140%) blur(12px);
+  -webkit-backdrop-filter: saturate(140%) blur(12px);
+  box-shadow: var(--shadow-1);
+}
+
+.appbar {
+  display: flex; align-items: center; gap: 14px;
+  max-width: var(--shell-max); margin: 0 auto; padding: 10px 24px 0;
+}
+
+.brand { flex: 0 0 auto; align-items: center; gap: 10px; }
+.brand h1 { font-size: 16px; letter-spacing: -.015em; }
+.brand-mark {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; flex: 0 0 auto;
+  border-radius: 8px;
+  background: linear-gradient(150deg, var(--accent), var(--accent-dim));
+  color: var(--on-accent); font-size: 14px; line-height: 1;
+  box-shadow: var(--shadow-1);
+}
+.brand-text { display: flex; flex-direction: column; gap: 1px; line-height: 1.15; }
+.brand .sub { font-size: 11.5px; }
+
+.appbar-spacer { flex: 1 1 auto; }
+
+/* The search control is a button, not an input: it opens the palette, which
+   is where the typing actually happens. Making it look like a field and then
+   moving focus elsewhere on the first keystroke would be a lie. */
+.omni {
+  display: inline-flex; align-items: center; gap: 9px;
+  flex: 0 1 300px; min-width: 0;
+  background: var(--bg-3); border: 1px solid var(--border);
+  border-radius: 999px; padding: 6px 8px 6px 13px;
+  color: var(--text-faint); font: inherit; font-size: 13px;
+  cursor: pointer; text-align: left;
+}
+.omni:hover { border-color: var(--accent-dim); color: var(--text-dim); }
+.omni-label { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.omni-icon { flex: 0 0 auto; opacity: .8; }
+
+kbd {
+  display: inline-block; font-family: var(--mono); font-size: 10.5px;
+  line-height: 1.5; padding: 1px 6px; min-width: 20px; text-align: center;
+  background: var(--bg-2); border: 1px solid var(--border);
+  border-bottom-width: 2px; border-radius: 5px; color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; width: 32px; height: 32px;
+  background: transparent; border: 1px solid transparent; border-radius: 8px;
+  color: var(--text-dim); font: inherit; font-size: 15px; cursor: pointer;
+  transition: background var(--fast), color var(--fast), border-color var(--fast);
+}
+.icon-btn:hover { background: var(--bg-3); color: var(--text); border-color: var(--border); }
+
+nav#nav {
+  max-width: var(--shell-max); margin: 0 auto; padding: 0 24px;
+  gap: 4px; scrollbar-width: none;
+}
+nav#nav::-webkit-scrollbar { display: none; }
+
+.tab {
+  position: relative; border-bottom: none; border-radius: 8px 8px 0 0;
+  padding: 8px 13px 11px; font-size: 13.5px; font-weight: 500;
+}
+.tab::after {
+  content: "";
+  position: absolute; left: 10px; right: 10px; bottom: 0;
+  height: 2px; border-radius: 2px 2px 0 0;
+  background: transparent; transition: background var(--fast);
+}
+.tab:hover { background: var(--bg-3); }
+.tab.active { color: var(--text); }
+.tab.active::after { background: var(--accent); }
+
+/* The bar is sticky and translucent, so the nav row needs its own hairline
+   rather than relying on the header border — with content sliding under the
+   blur, one border on the outer element reads as a smear. */
+header.top::after {
+  content: ""; display: block; height: 1px; background: var(--border);
+}
+
+main { max-width: var(--shell-max); }
+footer { max-width: var(--shell-max); }
+
+/* ---------- the standing disclaimer, collapsed ----------------------------
+   It has to be readable in full at least once, and it has to stop eating a
+   fifth of every screen after that. Open on a first visit, and thereafter a
+   single line that still carries the one sentence that matters, with the
+   rest a click away. The choice is remembered.
+   ------------------------------------------------------------------------ */
+
+.disclaimer {
+  background: var(--amber-bg); border-color: var(--amber-line);
+  border-left-width: 3px; color: var(--amber-fg-soft);
+  padding: 0; overflow: hidden;
+}
+.disclaimer strong { color: var(--amber-fg-2); }
+.disc-head {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: none; border: 0; color: inherit; font: inherit;
+  font-size: 13px; text-align: left; padding: 9px 14px; cursor: pointer;
+}
+.disc-head:hover { color: var(--amber-fg-2); }
+.disc-icon { flex: 0 0 auto; font-size: 14px; }
+.disc-line { flex: 1 1 auto; min-width: 0; }
+.disc-line b { color: var(--amber-fg-2); font-weight: 600; }
+.disc-caret { flex: 0 0 auto; font-size: 10px; opacity: .7; }
+.disc-body {
+  padding: 11px 14px 13px 38px; font-size: 13.5px; line-height: 1.55;
+  border-top: 1px solid var(--amber-line);
+}
+.disc-body[hidden] { display: none; }
+.disc-body p { margin: 0 0 9px; }
+.disc-body p:last-child { margin: 0; }
+
+/* ---------- command palette ----------------------------------------------
+   649 compounds behind a tab and a search box is a lot of clicking. Ctrl-K
+   from anywhere, type three letters, press enter. It searches the database,
+   the tabs and the actions from one field, because someone who wants
+   "fentanyl" and someone who wants "export my log" both start by typing.
+   ------------------------------------------------------------------------ */
+
+.palette-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: var(--scrim);
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 10vh 16px 24px;
+  animation: fade-in var(--fast) both;
+}
+.palette {
+  width: 100%; max-width: 620px; max-height: 70vh;
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--elevated); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-3);
+  animation: pop-in var(--med) both;
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(-8px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+
+.palette-search {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 16px; border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.palette-search-icon { color: var(--text-faint); font-size: 15px; }
+.palette-input {
+  flex: 1 1 auto; min-width: 0;
+  background: none; border: 0; padding: 0;
+  color: var(--text); font: inherit; font-size: 16px;
+}
+.palette-input:focus { outline: none; }
+.palette-input::placeholder { color: var(--text-faint); }
+
+.palette-list { flex: 1 1 auto; overflow-y: auto; padding: 6px; }
+.palette-group {
+  padding: 9px 10px 5px; font-size: 10.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .07em; color: var(--text-faint);
+}
+.palette-item {
+  display: flex; align-items: center; gap: 11px; width: 100%;
+  background: none; border: 0; border-radius: var(--radius-sm);
+  color: var(--text); font: inherit; font-size: 14px;
+  text-align: left; padding: 8px 10px; cursor: pointer;
+}
+.palette-item:hover { background: var(--bg-3); }
+.palette-item.sel { background: var(--accent-soft); }
+.palette-item.sel .pi-name { color: var(--accent); }
+.pi-icon {
+  flex: 0 0 auto; width: 22px; text-align: center;
+  font-size: 13px; color: var(--text-faint);
+}
+.palette-item.sel .pi-icon { color: var(--accent); }
+.pi-body { flex: 1 1 auto; min-width: 0; }
+.pi-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pi-sub {
+  display: block; font-size: 11.5px; color: var(--text-faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pi-meta { flex: 0 0 auto; font-family: var(--mono); font-size: 11px; color: var(--text-faint); }
+.pi-star { flex: 0 0 auto; color: var(--caution); font-size: 12px; }
+
+.palette-empty { padding: 26px 16px; text-align: center; color: var(--text-dim); font-size: 13.5px; }
+
+.palette-foot {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 8px 14px; border-top: 1px solid var(--border);
+  background: var(--bg-3); font-size: 11.5px; color: var(--text-faint);
+}
+.palette-foot .hint { display: inline-flex; align-items: center; gap: 5px; }
+
+/* ---------- toasts ---------- */
+
+.toast-stack {
+  position: fixed; z-index: 300; right: 18px; bottom: 18px;
+  display: flex; flex-direction: column; gap: 8px;
+  max-width: min(380px, calc(100vw - 36px));
+  pointer-events: none;
+}
+.toast {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: var(--elevated); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius); padding: 10px 13px;
+  box-shadow: var(--shadow-2); font-size: 13.5px; color: var(--text);
+  pointer-events: auto;
+  animation: toast-in var(--med) both;
+}
+.toast.out { animation: toast-out var(--med) both; }
+.toast-ok { border-left-color: var(--ok); }
+.toast-warn { border-left-color: var(--caution); }
+.toast-danger { border-left-color: var(--danger); }
+.toast-icon { flex: 0 0 auto; font-size: 14px; line-height: 1.5; }
+.toast-body { flex: 1 1 auto; min-width: 0; line-height: 1.45; }
+.toast-action {
+  flex: 0 0 auto; background: none; border: 0; padding: 0;
+  color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.toast-action:hover { text-decoration: underline; }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(10px) scale(.97); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes toast-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateX(16px); }
+}
+
+/* ---------- keyboard-shortcut sheet ---------- */
+
+.keys-grid { display: grid; gap: 18px 26px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.keys-col h4 { margin: 0 0 8px; }
+.keys-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 5px 0; border-bottom: 1px solid var(--border-soft); font-size: 13.5px;
+}
+.keys-row:last-child { border-bottom: 0; }
+.keys-row .keys { flex: 0 0 auto; display: flex; gap: 4px; }
+
+/* ---------- cards, tiles, controls: a pass for depth ---------- */
+
+.card { box-shadow: var(--shadow-1); }
+.drug-tile:hover {
+  border-color: var(--accent-dim);
+  box-shadow: var(--shadow-1);
+  transform: translateY(-1px);
+}
+.btn:hover { background: var(--bg-2); }
+.btn.primary { color: var(--on-accent); }
+.btn.primary:hover { background: var(--accent); border-color: var(--accent); }
+.btn:active { transform: translateY(1px); }
+
+.subtab.active { color: var(--on-accent); }
+.seg-btn.active { color: var(--on-accent); }
+
+/* A star that reads as on at a glance and does not shift the layout when it
+   changes state. */
+.star-btn {
+  background: none; border: 1px solid transparent; border-radius: 7px;
+  color: var(--text-faint); font: inherit; font-size: 15px; line-height: 1;
+  padding: 4px 7px; cursor: pointer;
+}
+.star-btn:hover { color: var(--caution); background: var(--bg-3); border-color: var(--border); }
+.star-btn.on { color: var(--caution); }
+
+.pinned-row { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 6px; }
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 860px) {
+  .omni { flex-basis: 44px; padding: 6px; justify-content: center; }
+  .omni .omni-label, .omni kbd { display: none; }
+}
+
+@media (max-width: 640px) {
+  .appbar { padding: 9px 14px 0; gap: 8px; }
+  nav#nav { padding: 0 14px; }
+  .brand .sub { display: none; }
+  .toast-stack { right: 10px; left: 10px; bottom: 10px; max-width: none; }
+  .palette-overlay { padding: 6vh 10px 16px; }
+  .keys-grid { grid-template-columns: 1fr; }
+  .tab { padding: 8px 10px 11px; font-size: 13px; }
+}
+
+/* ---------- substance page: title and its pin ---------- */
+
+.drug-title-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.drug-title-row h1 { margin: 0; }
+.drug-title-row .star-btn { font-size: 18px; }
+
+/* ---------- pinned strip on the substance list ---------- */
+
+.pin-strip {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 0 0 14px; padding: 10px 12px;
+  background: var(--bg-2); border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.pin-strip-label {
+  flex: 0 0 auto; font-size: 10.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .07em; color: var(--text-faint);
+}
+.pin-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bg-3); border: 1px solid var(--border);
+  border-radius: 999px; padding: 4px 12px;
+  color: var(--text); font: inherit; font-size: 13px; cursor: pointer;
+}
+.pin-chip:hover { border-color: var(--accent); color: var(--accent); }
+.pin-chip .pin-star { color: var(--caution); font-size: 11px; }
+
+/* ---------- empty state for a database with no pins yet ---------- */
+
+.pin-hint { color: var(--text-faint); font-size: 12.5px; }
+.pin-hint kbd { margin: 0 2px; }
+
+/* ---------- profile chip in the application bar ----------
+   Shows the two figures that actually change the numbers on screen — body
+   weight and CYP status — because a profile control that says only "settings"
+   gives no clue that estimates are being adjusted at all. On a narrow screen
+   the text drops and the gear remains. */
+
+.profile-chip {
+  display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto;
+  background: var(--bg-3); border: 1px solid var(--border); border-radius: 999px;
+  padding: 5px 12px 5px 10px;
+  color: var(--text-dim); font: inherit; font-family: var(--mono); font-size: 11.5px;
+  cursor: pointer; white-space: nowrap;
+  transition: background var(--fast), border-color var(--fast), color var(--fast);
+}
+.profile-chip:hover { color: var(--text); border-color: var(--accent-dim); }
+.profile-chip .pc-icon { font-family: var(--sans); font-size: 12px; }
+/* Adjustments switched off: the chip stays legible but stops claiming the
+   figures behind it are personalised. */
+.profile-chip.off { opacity: .6; }
+.profile-chip.off .pc-text { text-decoration: line-through; }
+
+@media (max-width: 980px) {
+  .profile-chip .pc-text { display: none; }
+  .profile-chip { padding: 5px 9px; }
+}
+
+/* ---------- substance page: jump bar ----------
+   Deliberately quiet — it is a map of the page, not a set of tabs, and the
+   sections below it are the real navigation. It wraps rather than scrolls,
+   because a jump bar you have to scroll to read defeats itself. */
+
+.jump-bar {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin: 18px 0 4px; padding: 10px 12px;
+  background: var(--bg-2); border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+}
+.jump-link {
+  background: var(--bg-3); border: 1px solid transparent; border-radius: 999px;
+  color: var(--text-dim); font: inherit; font-size: 12.5px;
+  padding: 4px 11px; cursor: pointer; white-space: nowrap;
+  transition: color var(--fast), border-color var(--fast), background var(--fast);
+}
+.jump-link:hover { color: var(--accent); border-color: var(--accent-dim); background: var(--bg-2); }
+
+/* Smooth scrolling is opt-in at the document level so the jump bar can use it
+   without every other scroll in the app inheriting it. */
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: auto; }
+}
+
+/* Sits directly under the theme control it explains. */
+.settings-theme-note { margin: 8px 0 0; }
+
+/* ==========================================================================
+   ICONS, TAB BAR, AND THE PHONE LAYOUT
+   ========================================================================== */
+
+.icon { display: block; flex: 0 0 auto; }
+
+/* Desktop: the icon is redundant next to a word, so it is dropped rather
+   than shrunk. Six labelled tabs fit a wide bar comfortably. */
+.tab .icon { display: none; }
+.tab-label { display: inline; }
+
+/* --------------------------------------------------------------------------
+   Phone: the tabs move to the bottom
+   --------------------------------------------------------------------------
+   A horizontally scrolling tab strip put Patterns and FAQ off the right-hand
+   edge of a 375 px screen, with nothing to say they were there. A fixed
+   bottom bar shows all six at once, and puts them where a thumb already is
+   — this is an app people open one-handed, at three in the morning,
+   sometimes to check whether a combination is about to hurt them.
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 700px) {
+  nav#nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    display: flex; gap: 0; padding: 4px 2px;
+    padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px));
+    margin: 0; max-width: none;
+    background: color-mix(in srgb, var(--bg-2) 94%, transparent);
+    backdrop-filter: saturate(140%) blur(14px);
+    -webkit-backdrop-filter: saturate(140%) blur(14px);
+    border-top: 1px solid var(--border);
+    overflow: visible;
+  }
+
+  .tab {
+    flex: 1 1 0; min-width: 0;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    border-radius: 10px; padding: 6px 2px 5px;
+    font-size: 10px; letter-spacing: -.01em;
+  }
+  .tab .icon { display: block; }
+  .tab-label {
+    display: block; width: 100%; text-align: center;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  /* The underline belongs to the top-of-page bar; down here the active tab
+     is marked by colour and a filled pill instead. */
+  .tab::after { display: none; }
+  .tab.active { color: var(--accent); background: var(--accent-soft); }
+  .tab:hover { background: var(--bg-3); }
+  .tab.active:hover { background: var(--accent-soft); }
+
+  /* The bar floats over the page, so the page has to end above it. */
+  body { padding-bottom: 66px; }
+  .toast-stack { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
+
+  /* The bar is 'position: fixed', and a backdrop-filter on an ancestor makes
+     that ancestor the containing block for it — which would pin the nav to
+     the bottom of the header instead of the bottom of the screen. The header
+     gives up its blur on a phone; a solid bar is the right call at this width
+     anyway, and the nav keeps its own. */
+  header.top {
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+    background: var(--bg-2);
+    border-bottom: 1px solid var(--border);
+  }
+  header.top::after { display: none; }
+  .appbar { padding-bottom: 9px; }
+}
+
+/* The application bar controls are icons at every width; only their spacing
+   changes. */
+.icon-btn .icon { margin: 0 auto; }
+.omni-icon { display: flex; align-items: center; }
+.palette-search-icon { display: flex; align-items: center; }
+
+/* ---------- substance browser: sort and filter row ---------- */
+
+.browse-controls {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 0 0 14px;
+}
+.browse-count {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 0 0 10px;
+}
+/* A pinned compound is marked in the grid too, so the strip at the top and
+   the list below it agree about what is pinned. */
+.dt-pin { margin-left: 6px; color: var(--caution); font-size: 11px; }
+
+/* ---------- skip link ----------
+   Off-screen until focused, then a real button at the top left. */
+
+.skip-link {
+  position: fixed; top: 8px; left: 8px; z-index: 400;
+  transform: translateY(-200%);
+  background: var(--accent); color: var(--on-accent);
+  border-radius: var(--radius-sm); padding: 9px 15px;
+  font-size: 14px; font-weight: 600; text-decoration: none;
+  box-shadow: var(--shadow-2);
+  transition: transform var(--fast);
+}
+.skip-link:focus { transform: none; }
+
+/* ==========================================================================
+   PRINT
+   --------------------------------------------------------------------------
+   A substance page is reference material, and reference material gets
+   printed and taken somewhere — to a clinician, into a kitchen, into a bag.
+   What is worth putting on paper is the content: the chrome, the controls
+   and anything that only works by being clicked are not.
+
+   Collapsed sections are forced open, because a printout of seven headings
+   with nothing under them is worse than no printout.
+   ========================================================================== */
+
+@media print {
+  :root {
+    /* Ink on white regardless of the theme on screen. */
+    --bg: #ffffff; --bg-2: #ffffff; --bg-3: #ffffff;
+    --surface-sunken: #f4f4f4; --code-bg: #f4f4f4; --elevated: #ffffff;
+    --border: #b8b8b8; --border-soft: #d8d8d8; --border-strong: #999999;
+    --grid: #e0e0e0; --flow: #888888;
+    --text: #000000; --text-soft: #1a1a1a; --text-dim: #3a3a3a;
+    --text-mute: #4a4a4a; --text-faint: #5a5a5a;
+    --accent: #0b4f8a; --accent-dim: #0b4f8a; --accent-soft: #eef4fb;
+    --shadow-1: none; --shadow-2: none; --shadow-3: none;
+  }
+
+  header.top, nav#nav, footer, .skip-link,
+  .toast-stack, .palette-overlay, .modal-overlay,
+  .jump-bar, .browse-controls, .subtabs, .scrub-bar, .scrub-bar-top,
+  .btn, .star-btn, .icon-btn, .omni, .profile-chip,
+  .note-example, .header-actions, .sources-toggle {
+    display: none !important;
+  }
+
+  body { padding: 0; background: #fff; }
+  main { max-width: none; padding: 0; }
+
+  /* Everything the reader has folded away opens for the printer. */
+  .sec-body[hidden], .drug-grid[hidden], .disc-body[hidden] { display: block !important; }
+  .sec-body[hidden] { display: block !important; }
+
+  /* Keep a heading with what it introduces, and never split a warning. */
+  h1, h2, h3, h4, .sec-head, .sec-head-static { break-after: avoid; }
+  .card, .warn-block, .finding, .metabolite, .route-block, .chart-wrap,
+  .isomer, .mix-banner {
+    break-inside: avoid;
+    border-color: var(--border);
+  }
+
+  .disclaimer { border: 1px solid #999; background: #f6f6f6; color: #000; }
+  .disclaimer .disc-head { cursor: default; }
+
+  a { text-decoration: underline; }
+  .chart { min-width: 0; }
+}
+
+/* ---------- FAQ: the group strip ---------- */
+
+.faq-jump { margin: 4px 0 16px; }
+.faq-jump[hidden] { display: none; }
+/* The expand-all sits at the end of the same strip but is not a destination,
+   so it is marked as the odd one out rather than looking like a ninth group. */
+.jump-link-action {
+  margin-left: auto; background: none;
+  border-color: var(--border); color: var(--text-faint);
+}
+.jump-link-action:hover { color: var(--accent); }
+
+/* ---------- the empty board ---------- */
+
+.empty-lead { padding: 40px 28px; border-style: solid; border-color: var(--border); }
+.empty-title { margin: 0 0 8px; font-size: 17px; color: var(--text); }
+.empty-lead > .muted { max-width: 52ch; margin: 0 auto 18px; }
+.empty-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.empty-hint { margin: 16px 0 0; }
+
+/* ---------- modal: the page behind holds still ---------- */
+
+body.modal-open { overflow: hidden; }
+.modal:focus { outline: none; }
+.modal-close {
+  border-radius: 6px; width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-close:hover { background: var(--bg-3); }
+
+/* ---------- a meter with its value beside it ----------
+   The number used to be positioned over the fill, which meant it changed
+   contrast as the bar grew past it and was clipped at the fill edge. */
+
+.meter-row { display: flex; align-items: center; gap: 9px; }
+.meter-row .mini-meter { flex: 1 1 auto; min-width: 60px; height: 8px; }
+.meter-row .mini-fill { border-radius: 4px; }
+.meter-row-val {
+  flex: 0 0 auto; font-family: var(--mono); font-size: 11.5px;
+  color: var(--text); min-width: 34px; text-align: right;
+}
+
+/* ==========================================================================
+   SOLUTION TAB
+   ========================================================================== */
+
+/* The title owns the mode switch, because the switch decides what the tab
+   is; the file operations sit apart from it and from each other. */
+.solution-head { align-items: flex-start; }
+.solution-title { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.solution-title h2 { margin: 0; }
+.solution-files { gap: 6px; }
+.solution-intro { max-width: 76ch; }
+
+/* ---------- the mixture, listed where it is being built ---------- */
+
+.mixture-panel {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg-2); margin: 14px 0 18px; overflow: hidden;
+}
+.mixture-head {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 14px; border-bottom: 1px solid var(--border-soft);
+}
+.mixture-head h3 { margin: 0; font-size: 15px; }
+.mixture-head .entry-row { margin: 0 0 0 auto; align-items: center; }
+.mixture-panel:not(:has(.mix-rows)) .mixture-head { border-bottom: 0; }
+
+.mix-rows { display: flex; flex-direction: column; }
+.mix-row {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 9px 14px; border-top: 1px solid var(--border-soft);
+}
+.mix-row:first-child { border-top: 0; }
+.mix-row:hover { background: var(--bg-3); }
+
+/* The dot carries the colour that ingredient has in the composition chart,
+   so the list and the chart can be read against each other. */
+.mix-row-dot {
+  flex: 0 0 auto; width: 9px; height: 9px; border-radius: 3px;
+  align-self: center;
+}
+.mix-row-name {
+  flex: 1 1 auto; min-width: 0;
+  background: none; border: 0; padding: 0; text-align: left;
+  color: var(--text); font: inherit; font-weight: 600; font-size: 14px;
+  cursor: pointer; overflow-wrap: anywhere;
+}
+.mix-row-name:hover { color: var(--accent); }
+.mix-row-amt {
+  flex: 0 0 auto; font-family: var(--mono); font-size: 12.5px; color: var(--text);
+}
+.mix-row-sub { flex: 0 0 auto; min-width: 96px; text-align: right; }
+.mix-row .chip-x { flex: 0 0 auto; align-self: center; }
+
+.mix-row-inactive .mix-row-name { color: var(--text-dim); font-weight: 500; }
+.mix-row-hazard .mix-row-name { color: var(--red-fg); }
+
+@media (max-width: 640px) {
+  .mixture-head .entry-row { margin-left: 0; width: 100%; }
+  .mix-row { flex-wrap: wrap; }
+  .mix-row-sub { min-width: 0; text-align: left; }
+}
+
+/* Seven stat cards at 150px minimum wrapped their own values ("1.000 g/ml"
+   broke across two lines). A wider floor gives fewer, more legible cards. */
+.stat-row { grid-template-columns: repeat(auto-fit, minmax(178px, 1fr)); }
+
+/* ---------- starting points on an otherwise empty page ----------
+   A page that can only be started by typing into a search box is a dead end
+   when the thing you have to type is one of 649 names. These are the ways in. */
+
+.start-rows {
+  display: flex; flex-direction: column; gap: 12px;
+  margin: 20px auto 0; max-width: 640px; text-align: left;
+}
+.start-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.start-label {
+  flex: 0 0 auto; min-width: 132px;
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--text-faint);
+}
+.start-chips { margin: 0; flex: 1 1 260px; }
+
+@media (max-width: 560px) {
+  .start-label { min-width: 0; }
+}
+
+/* ==========================================================================
+   SUBSTANCE PAGE
+   ========================================================================== */
+
+/* ---------- key facts ----------
+   The five figures a substance page is opened for, above the prose and
+   before anything that has to be expanded. Deliberately not cards: they are
+   one object read across, not five things to compare. */
+
+.key-facts {
+  display: grid; gap: 1px;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  margin: 16px 0 4px;
+  background: var(--border-soft);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.fact {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 11px 14px; background: var(--bg-2);
+}
+.fact-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--text-faint);
+}
+.fact-value {
+  font-family: var(--mono); font-size: 15.5px; color: var(--text);
+  line-height: 1.25; overflow-wrap: anywhere;
+}
+.fact-note { font-size: 11px; color: var(--text-faint); }
+
+/* ---------- contextual help ----------
+   A question mark beside a heading, leading into the FAQ's own section for
+   that page. Deliberately small: it is an offer, not a call to action. */
+
+.help-link {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 19px; height: 19px; margin-left: 9px; vertical-align: middle;
+  background: var(--bg-3); border: 1px solid var(--border); border-radius: 50%;
+  color: var(--text-faint); font: inherit; font-size: 11px; font-weight: 700;
+  line-height: 1; cursor: pointer;
+  transition: color var(--fast), border-color var(--fast), background var(--fast);
+}
+.help-link:hover { color: var(--accent); border-color: var(--accent-dim); background: var(--bg-2); }
+
+.faq-filter-note {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: -6px 0 12px;
+}
+
+/* ---------- the worst finding, said out loud ----------
+   Sits above the pair list, which is already sorted worst-first. Only
+   "dangerous" and "unsafe" get one: a page that shouts about everything is
+   a page nobody reads carefully. */
+
+.pair-alert {
+  border: 1px solid var(--border); border-left: 4px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px; margin: 0 0 12px;
+  background: var(--bg-2);
+}
+.pair-alert.level-dangerous { border-left-color: var(--danger); background: var(--red-bg); }
+.pair-alert.level-unsafe { border-left-color: var(--warn); background: var(--orange-bg); }
+.pair-alert-head {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px;
+}
+.pair-alert-names { font-size: 16px; }
+.pair-alert-mech { margin: 0 0 6px; font-size: 14px; }
+.pair-alert-detail { margin: 0 0 12px; font-size: 13.5px; color: var(--text-dim); max-width: 78ch; }
+.pair-alert .btn { background: var(--bg-2); }
+
+/* ---------- timeline focus ---------- */
+
+.focus-row {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  margin: 0 0 12px;
+}
+.chip.chip-on {
+  background: var(--accent-soft); border-color: var(--accent-dim); color: var(--accent);
+  font-weight: 600;
+}
+
+/* A button that reads as a link, for actions offered inside a sentence. */
+.link-btn {
+  background: none; border: 0; padding: 0;
+  color: var(--accent); font: inherit; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.link-btn:hover { color: var(--text); }
+.overflow-note { margin-top: 8px; }
